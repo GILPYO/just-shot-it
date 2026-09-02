@@ -14,6 +14,33 @@ export default class GameScene extends Phaser.Scene {
   private maxHp: number = 100;
   private isHit: boolean = false;
 
+  // 스테미너 셋팅
+  private stamina: number = 100;
+  private maxStamina: number = 100;
+  private staminaRegenRate: number = 15;
+  private sprintCost: number = 20;
+  private sprintSpeed: number = 350;
+  private normalSpeed: number = 200;
+
+  // 조준 시스템
+  private isADS: boolean = false;
+  private hipSpread: number = 10;
+  private adsSpread: number = 3;
+  private adsSpeedMultiplier: number = 0.5;
+
+  // 재장전 시스템
+  private magazineSize: number = 15;
+  private currentAmmo: number = 15;
+  private reloadTime: number = 1200;
+  private isReloading: boolean = false;
+
+  // 경험치 & 레벨 시스템
+  private level: number = 1;
+  private currentXp: number = 0;
+  private xpToNext: number = 20;
+  private gems!: Phaser.Physics.Arcade.Group;
+  private magnetRange: number = 50;
+
   constructor() {
     super(`GameScene`);
   }
@@ -31,39 +58,68 @@ export default class GameScene extends Phaser.Scene {
 
     this.player = this.physics.add.sprite(640, 360, "player");
 
+    // 우클릭 기본 메뉴 차단
+    this.input.mouse?.disableContextMenu();
+
+    // 키 등록 영역
     this.keys = {
       W: this.input.keyboard!.addKey(`W`),
       A: this.input.keyboard!.addKey(`A`),
       S: this.input.keyboard!.addKey(`S`),
       D: this.input.keyboard!.addKey(`D`),
+      R: this.input.keyboard!.addKey(`R`),
+      SHIFT: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
     };
 
+    // 발사 시스템 ( 좌클릭 )
     this.bullets = this.physics.add.group();
-
     this.input.on(`pointerdown`, (pointer: Phaser.Input.Pointer) => {
       if (pointer.button !== 0) return;
+
+      // 재장전 영역
+      if (this.isReloading) return;
+      if (this.currentAmmo <= 0) {
+        this.startReload();
+        return;
+      }
+
+      this.currentAmmo--;
 
       const bullet = this.bullets.create(
         this.player.x,
         this.player.y,
-        `player`,
+        `player`
       ) as Phaser.Physics.Arcade.Sprite;
 
       bullet.setScale(0.2);
       bullet.setTint(0xffff00);
 
-      const speed = 1000;
-      const angle = Phaser.Math.Angle.Between(
+      // 마우스 방향 각도 계산 ( 라디안 )
+      const baseAngle = Phaser.Math.Angle.Between(
         this.player.x,
         this.player.y,
         pointer.worldX,
-        pointer.worldY,
+        pointer.worldY
       );
 
-      bullet.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+      // 탄 퍼짐 계산
+      // ADS 중이면 3도, 아니면 12도 퍼짐
+      const spreadDog = this.isADS ? this.adsSpread : this.hipSpread;
+
+      const spreadRad = (spreadDog * Math.PI) / 180;
+
+      const offset = (Math.random() - 0.5) * spreadRad;
+
+      const finalAngle = baseAngle + offset;
+
+      const bulletSpeed = 1000;
+      bullet.setVelocity(
+        Math.cos(finalAngle) * bulletSpeed,
+        Math.sin(finalAngle) * bulletSpeed
+      );
     });
 
-    //좀비 기본 셋팅 값
+    // 좀비 기본 셋팅 값
     const zombieGraphics = this.make.graphics({ x: 0, y: 0 });
     zombieGraphics.fillStyle(0xff0000);
     zombieGraphics.fillRect(0, 0, 28, 28);
@@ -102,13 +158,13 @@ export default class GameScene extends Phaser.Scene {
       },
     });
 
-    //좀비 사살 시스템
+    // 좀비 사살 시스템
     this.physics.add.overlap(this.bullets, this.zombies, (bullet, zombie) => {
       bullet.destroy();
       zombie.destroy();
     });
 
-    //피격 시스템
+    // 피격 시스템
     this.physics.add.overlap(this.player, this.zombies, () => {
       if (this.isHit) return;
 
@@ -127,38 +183,85 @@ export default class GameScene extends Phaser.Scene {
         this.scene.pause();
       }
     });
+
+    // 경험치 젬 & 레벨 시스템
   }
 
-  update() {
-    //키보드 조작 시스템
-    const speed = 200;
+  update(time: number, delta: number) {
+    const dt = delta / 1000;
+
+    // === 이동 방향 계산 ===
     let vx = 0;
     let vy = 0;
+    if (this.keys.A.isDown) vx = -1;
+    if (this.keys.D.isDown) vx = 1;
+    if (this.keys.W.isDown) vy = -1;
+    if (this.keys.S.isDown) vy = 1;
 
-    if (this.keys.A.isDown) vx = -speed;
-    if (this.keys.D.isDown) vx = speed;
-    if (this.keys.W.isDown) vy = -speed;
-    if (this.keys.S.isDown) vy = speed;
+    // === 대각선 정규화 ===
+    const len = Math.sqrt(vx * vx + vy * vy);
+    if (len > 0) {
+      vx /= len; // vx = vx / len (길이가 1이 되도록 나눠줌)
+      vy /= len; // 이걸 "정규화(normalize)"라고 부름
+    }
 
-    this.player.setVelocity(vx, vy);
+    // === 달리기 판정 ===
+    const isMoving = vx !== 0 || vy !== 0;
 
-    //마우스 조작 시스템
+    // 쉬프트를 누르고 있거나 스테미나가 남아있거나 정조준 하고있지 않을 때 달림.
+    const isSprinting =
+      this.keys.SHIFT.isDown && isMoving && this.stamina > 0 && !this.isADS;
+
+    // === 속도 결정 ===
+    // 달리기 중이면 350, 아니면 200
     const pointer = this.input.activePointer;
+
+    // 우클릭 정조준
+    this.isADS = pointer.rightButtonDown();
+
+    let speed = isSprinting ? this.sprintSpeed : this.normalSpeed;
+
+    if (this.isADS) {
+      speed *= this.adsSpeedMultiplier;
+    }
+
+    // === 스태미너 소모/회복 ===
+    if (isSprinting) {
+      // 달리기 중: 초당 20씩 줄어듦
+      this.stamina = Math.max(0, this.stamina - this.sprintCost * dt);
+    } else {
+      // 달리기 안 할 때: 초당 15씩 회복
+      this.stamina = Math.min(
+        this.maxStamina,
+        this.stamina + this.staminaRegenRate * dt
+      );
+    }
+
+    // === 재장전 ===
+    if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
+      this.startReload();
+    }
+
+    // === 속도 적용 ===
+    this.player.setVelocity(vx * speed, vy * speed);
+
+    // === 마우스 방향으로 플레이어 회전 ===
     const angle = Phaser.Math.Angle.Between(
       this.player.x,
       this.player.y,
       pointer.worldX,
-      pointer.worldY,
+      pointer.worldY
     );
     this.player.setRotation(angle);
 
-    //좀비가 유저를 따라오게하는 시스템
+    // === 좀비 추적 ===
     this.zombies.getChildren().forEach((z) => {
       const zombie = z as Phaser.Physics.Arcade.Sprite;
       this.physics.moveToObject(zombie, this.player, 80);
+      // moveToObject: 좀비가 플레이어 방향으로 속도 80으로 이동
     });
 
-    //화면 밖 탄환 삭제 시스템 ( 메모리 누수 방지 )
+    // === 화면 밖 탄환 삭제 ===
     this.bullets.getChildren().forEach((b) => {
       const bullet = b as Phaser.Physics.Arcade.Sprite;
       if (
@@ -169,6 +272,19 @@ export default class GameScene extends Phaser.Scene {
       ) {
         bullet.destroy();
       }
+    });
+  }
+  private startReload(): void {
+    if (this.isReloading) return;
+    if (this.currentAmmo >= this.magazineSize) return;
+
+    this.isReloading = true;
+    console.log("RELOADING...");
+
+    this.time.delayedCall(this.reloadTime, () => {
+      this.currentAmmo = this.magazineSize;
+      this.isReloading = false;
+      console.log("RELOAD COMPLETE!", this.currentAmmo, "/", this.magazineSize);
     });
   }
 }

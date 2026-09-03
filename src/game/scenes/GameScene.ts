@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import EventBus from "../../EventBus";
 
 export default class GameScene extends Phaser.Scene {
   //기본 셋팅
@@ -45,6 +46,9 @@ export default class GameScene extends Phaser.Scene {
   private lightCanvas: HTMLCanvasElement | null = null;
   private lightCtx: CanvasRenderingContext2D | null = null;
 
+  // 재장전 타이밍용
+  private reloadStartTime: number = 0;
+
   constructor() {
     super(`GameScene`);
   }
@@ -61,6 +65,9 @@ export default class GameScene extends Phaser.Scene {
     graphics.destroy();
 
     this.player = this.physics.add.sprite(640, 360, "player");
+
+    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    this.cameras.main.setZoom(0.5);
 
     // 우클릭 기본 메뉴 차단
     this.input.mouse?.disableContextMenu();
@@ -132,31 +139,15 @@ export default class GameScene extends Phaser.Scene {
 
     this.zombies = this.physics.add.group();
 
-    //화면 밖 탄환 삭제 시스템 ( 메모리 누수 방지 )
+    // 좀비 스폰 시스템 — 플레이어 주변 화면 밖에서 생성
     this.time.addEvent({
       delay: 2000,
       loop: true,
       callback: () => {
-        const side = Phaser.Math.Between(0, 3);
-        let x = 0;
-        let y = 0;
-
-        if (side === 0) {
-          x = Phaser.Math.Between(0, 1280);
-          y = -30;
-        }
-        if (side === 1) {
-          x = Phaser.Math.Between(0, 1280);
-          y = 750;
-        }
-        if (side === 2) {
-          x = -30;
-          y = Phaser.Math.Between(0, 720);
-        }
-        if (side === 3) {
-          x = 1310;
-          y = Phaser.Math.Between(0, 720);
-        }
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 500;
+        const x = this.player.x + Math.cos(angle) * distance;
+        const y = this.player.y + Math.sin(angle) * distance;
 
         this.zombies.create(x, y, "zombie");
       },
@@ -264,8 +255,8 @@ export default class GameScene extends Phaser.Scene {
     // === 대각선 정규화 ===
     const len = Math.sqrt(vx * vx + vy * vy);
     if (len > 0) {
-      vx /= len; // vx = vx / len (길이가 1이 되도록 나눠줌)
-      vy /= len; // 이걸 "정규화(normalize)"라고 부름
+      vx /= len;
+      vy /= len;
     }
 
     // === 달리기 판정 ===
@@ -304,7 +295,6 @@ export default class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
       this.startReload();
     }
-
     // === 속도 적용 ===
     this.player.setVelocity(vx * speed, vy * speed);
 
@@ -317,11 +307,27 @@ export default class GameScene extends Phaser.Scene {
     );
     this.player.setRotation(angle);
 
-    // === 좀비 추적 ===
+    // === 좀비 추적 + 시야 시스템 ===
     this.zombies.getChildren().forEach((z) => {
       const zombie = z as Phaser.Physics.Arcade.Sprite;
       this.physics.moveToObject(zombie, this.player, 80);
 
+      // 플레이어와 좀비 사이 거리
+      const distToZombie = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        zombie.x,
+        zombie.y
+      );
+
+      // 발밑 원형 범위 안이면 (근접)
+      if (distToZombie < 140) {
+        zombie.setTint(0xff3333);
+        zombie.setAlpha(1.0);
+        return; // forEach의 return = continue와 같음
+      }
+
+      // 플래시라이트 각도 체크
       const zombieAngle = Phaser.Math.Angle.Between(
         this.player.x,
         this.player.y,
@@ -339,13 +345,14 @@ export default class GameScene extends Phaser.Scene {
         Phaser.Math.Angle.Wrap(zombieAngle - aimAngle)
       );
 
-      const coneHalfRad = ((this.isADS ? 22 : 33) * Math.PI) / 180;
+      const coneHalfRad = ((this.isADS ? 15 : 33) * Math.PI) / 180;
 
       if (angleDiff < coneHalfRad) {
         zombie.setTint(0xff3333);
         zombie.setAlpha(1.0);
       } else {
-        zombie.setAlpha(0);
+        zombie.setTint(0x000000);
+        zombie.setAlpha(0.01);
       }
     });
 
@@ -364,28 +371,44 @@ export default class GameScene extends Phaser.Scene {
       }
     });
 
-    // === 화면 밖 탄환 삭제 ===
+    // === 화면 밖 탄환 삭제 (플레이어 기준) ===
     this.bullets.getChildren().forEach((b) => {
       const bullet = b as Phaser.Physics.Arcade.Sprite;
-      if (
-        bullet.x < -50 ||
-        bullet.x > 1330 ||
-        bullet.y < -50 ||
-        bullet.y > 770
-      ) {
+      const dist = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        bullet.x,
+        bullet.y
+      );
+      if (dist > 800) {
         bullet.destroy();
       }
     });
 
     // === 플래시라이트 그리기 ===
     this.drawFlashLight();
+
+    // === HUD 데이터 전송 ===
+    EventBus.emit(`hud-update`, {
+      hp: this.hp,
+      maxHp: this.maxHp,
+      stamina: this.stamina,
+      maxStamina: this.maxStamina,
+      currentAmmo: this.currentAmmo,
+      magazineSize: this.magazineSize,
+      level: this.level,
+      currentXp: this.currentXp,
+      xpToNext: this.xpToNext,
+      isADS: this.isADS,
+      isReloading: this.isReloading,
+    });
   }
   private startReload(): void {
     if (this.isReloading) return;
     if (this.currentAmmo >= this.magazineSize) return;
 
     this.isReloading = true;
-    console.log("RELOADING...");
+    this.reloadStartTime = Date.now();
 
     this.time.delayedCall(this.reloadTime, () => {
       this.currentAmmo = this.magazineSize;
@@ -398,16 +421,24 @@ export default class GameScene extends Phaser.Scene {
     const ctx = this.lightCtx;
     if (!ctx) return;
 
-    const pointer = this.input.activePointer;
+    const cam = this.cameras.main;
 
-    const px = this.player.x;
-    const py = this.player.y;
+    // 월드좌표 → 화면좌표 변환
+    const zoom = cam.zoom;
+    const playerScreen = cam.getWorldPoint(0, 0);
+    const px = (this.player.x - playerScreen.x) * zoom;
+    const py = (this.player.y - playerScreen.y) * zoom;
+
+    // 마우스도 같은 방식
+    const pointer = this.input.activePointer;
+    const mouseScreenX = (pointer.worldX - playerScreen.x) * zoom;
+    const mouseScreenY = (pointer.worldY - playerScreen.y) * zoom;
 
     const aimAngle = Phaser.Math.Angle.Between(
       px,
       py,
-      pointer.worldX,
-      pointer.worldY
+      mouseScreenX,
+      mouseScreenY
     );
 
     // === 화면 어둡게 칠하기 ===
@@ -419,70 +450,122 @@ export default class GameScene extends Phaser.Scene {
     // === 빛 영역 잘라내기 ===
     ctx.globalCompositeOperation = "destination-out";
 
-    // 발밑 원형
+    // 플래시라이트 파라미터
+    const coneHalfDeg = this.isADS ? 15 : 33;
+    const screenDiag = Math.sqrt(1280 * 1280 + 720 * 720);
+    const coneRange = this.isADS ? screenDiag * 0.5 : screenDiag * 0.4;
+    const coneHalfRad = (coneHalfDeg * Math.PI) / 180;
+    const segments = 32; // 더 부드럽게
+
+    // --- 발밑 원형 (방사형 그라디언트로 부드럽게) ---
+    const footGrad = ctx.createRadialGradient(px, py, 0, px, py, 90);
+    // createRadialGradient(중심x, 중심y, 내부반지름, 중심x, 중심y, 외부반지름)
+    // 중심은 같고 반지름만 0→90으로 = 원형 그라디언트
+    footGrad.addColorStop(0, "rgba(255,255,255,1.0)"); // 중심: 100% 지움 (밝음)
+    footGrad.addColorStop(0.6, "rgba(255,255,255,0.7)"); // 중간: 서서히
+    footGrad.addColorStop(1, "rgba(255,255,255,0)"); // 가장자리: 0% (어둠과 자연스럽게 섞임)
+
     ctx.beginPath();
-    ctx.arc(px, py, 70, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.arc(px, py, 90, 0, Math.PI * 2);
+    ctx.fillStyle = footGrad;
     ctx.fill();
 
-    // 부채꼴 플래시라이트
-    const coneHalfDeg = this.isADS ? 22 : 33;
-    const coneRange = this.isADS ? 380 : 280;
-    const coneHalfRad = (coneHalfDeg * Math.PI) / 180;
-    const segments = 24;
+    // --- 부채꼴 플래시라이트 (5겹 레이어로 부드러운 페이드) ---
+    // 바깥→안쪽 순서: 점점 밝고 + 점점 좁아짐 → 가장자리가 자연스럽게 사라짐
+    const layers = [
+      { rangeMult: 1.1, alpha: 0.15, angleBonus: 0.06 }, // 가장 바깥: 아주 희미한 번짐
+      { rangeMult: 1.0, alpha: 0.3, angleBonus: 0.03 }, // 바깥: 은은하게
+      { rangeMult: 0.85, alpha: 0.5, angleBonus: 0 }, // 중간
+      { rangeMult: 0.65, alpha: 0.75, angleBonus: -0.04 }, // 안쪽: 밝아짐
+      { rangeMult: 0.4, alpha: 1.0, angleBonus: -0.1 }, // 코어: 가장 밝고 좁음
+    ];
 
-    ctx.beginPath();
-    ctx.moveTo(px, py);
+    for (const layer of layers) {
+      const layerRange = coneRange * layer.rangeMult;
+      const layerHalf = coneHalfRad + layer.angleBonus;
+      // angleBonus가 음수 = 안쪽 레이어가 더 좁음 → 가장자리 페이드
 
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      const angle = aimAngle - coneHalfRad + t * coneHalfRad * 2;
-      ctx.lineTo(
-        px + Math.cos(angle) * coneRange,
-        py + Math.sin(angle) * coneRange
-      );
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const angle = aimAngle - layerHalf + t * layerHalf * 2;
+        ctx.lineTo(
+          px + Math.cos(angle) * layerRange,
+          py + Math.sin(angle) * layerRange
+        );
+      }
+
+      ctx.closePath();
+      ctx.fillStyle = `rgba(255,255,255,${layer.alpha})`;
+      ctx.fill();
     }
 
-    ctx.closePath();
-    ctx.fillStyle = "rgba(255,255,255,1.0)";
+    // --- 끝부분 둥근 확산 (타원형 글로우) ---
+    // 부채꼴 끝에 부드러운 원형 빛을 추가해서 퍼지는 느낌
+    const tipX = px + Math.cos(aimAngle) * coneRange * 0.7;
+    const tipY = py + Math.sin(aimAngle) * coneRange * 0.7;
+    const tipRadius = coneRange * 0.35;
+
+    const tipGrad = ctx.createRadialGradient(
+      tipX,
+      tipY,
+      0,
+      tipX,
+      tipY,
+      tipRadius
+    );
+    tipGrad.addColorStop(0, "rgba(255,255,255,0.4)");
+    tipGrad.addColorStop(0.5, "rgba(255,255,255,0.15)");
+    tipGrad.addColorStop(1, "rgba(255,255,255,0)");
+
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, tipRadius, 0, Math.PI * 2);
+    ctx.fillStyle = tipGrad;
     ctx.fill();
 
-    // === 그리기 모드로 전환 (눈을 어둠 위에 그리기 위해) ===
+    // === 그리기 모드로 전환 ===
     ctx.globalCompositeOperation = "source-over";
 
     // === 시야 밖 좀비 눈 빛나기 ===
-    // aimAngle은 위에서 이미 계산했으므로 재사용
-    const coneSightHalf = ((this.isADS ? 22 : 33) * Math.PI) / 180;
+    const coneSightHalf = coneHalfRad;
 
     this.zombies.getChildren().forEach((z) => {
       const zombie = z as Phaser.Physics.Arcade.Sprite;
       if (!zombie.active) return;
 
-      const zombieAngle = Phaser.Math.Angle.Between(px, py, zombie.x, zombie.y);
+      // 좀비도 같은 방식으로 화면 좌표 변환
+      const zScreenX = (zombie.x - playerScreen.x) * zoom;
+      const zScreenY = (zombie.y - playerScreen.y) * zoom;
+
+      // 화면 좌표끼리 각도 계산
+      const zombieAngle = Phaser.Math.Angle.Between(px, py, zScreenX, zScreenY);
       const angleDiff = Math.abs(
         Phaser.Math.Angle.Wrap(zombieAngle - aimAngle)
       );
 
+      // 발밑 원형(70px) 안이면 눈 그리지 않음
+      const dist = Phaser.Math.Distance.Between(px, py, zScreenX, zScreenY);
+      if (dist < 70) return;
+
       if (angleDiff >= coneSightHalf) {
-        const dist = Phaser.Math.Distance.Between(px, py, zombie.x, zombie.y);
+        if (dist > 800) return;
 
-        if (dist > 400) return;
-
-        const brightness = 1 - dist / 400;
+        const brightness = 1 - dist / 800;
         const eyeOffset = 4;
         const perpAngle = zombieAngle + Math.PI / 2;
 
-        const leftEyeX = zombie.x + Math.cos(perpAngle) * eyeOffset;
-        const leftEyeY = zombie.y + Math.sin(perpAngle) * eyeOffset;
+        const leftEyeX = zScreenX + Math.cos(perpAngle) * eyeOffset;
+        const leftEyeY = zScreenY + Math.sin(perpAngle) * eyeOffset;
 
-        const rightEyeX = zombie.x - Math.cos(perpAngle) * eyeOffset;
-        const rightEyeY = zombie.y - Math.sin(perpAngle) * eyeOffset;
+        const rightEyeX = zScreenX - Math.cos(perpAngle) * eyeOffset;
+        const rightEyeY = zScreenY - Math.sin(perpAngle) * eyeOffset;
 
         ctx.fillStyle = `rgba(255, 0, 0, ${brightness * 0.9})`;
 
         ctx.beginPath();
         ctx.arc(leftEyeX, leftEyeY, 2, 0, Math.PI * 2);
-
         ctx.fill();
 
         ctx.beginPath();

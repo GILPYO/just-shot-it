@@ -20,7 +20,7 @@ function App() {
     };
   }, []);
 
-  return <div ref={gameContainer} />;
+  return <div ref={gameContainer} id="game-container" />;
 }
 
 export default App;

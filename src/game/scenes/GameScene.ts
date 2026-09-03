@@ -41,6 +41,10 @@ export default class GameScene extends Phaser.Scene {
   private gems!: Phaser.Physics.Arcade.Group;
   private magnetRange: number = 50;
 
+  // 플래시 라이트 시스템
+  private lightCanvas: HTMLCanvasElement | null = null;
+  private lightCtx: CanvasRenderingContext2D | null = null;
+
   constructor() {
     super(`GameScene`);
   }
@@ -223,6 +227,27 @@ export default class GameScene extends Phaser.Scene {
         console.log(`LEVEL UP Lv.${this.level} (next: ${this.xpToNext})`);
       }
     });
+
+    // 플래시 라이트 별도 캔버스 생성
+    const gameContainer = document.getElementById(`game-container`);
+
+    if (gameContainer) {
+      this.lightCanvas = document.createElement(`canvas`);
+
+      this.lightCanvas.width = 1280;
+      this.lightCanvas.height = 720;
+
+      this.lightCanvas.style.position = `absolute`;
+      this.lightCanvas.style.top = `0`;
+      this.lightCanvas.style.left = `0`;
+      this.lightCanvas.style.pointerEvents = `none`;
+      this.lightCanvas.style.zIndex = `1`;
+
+      gameContainer.style.position = `relative`;
+      gameContainer.appendChild(this.lightCanvas);
+
+      this.lightCtx = this.lightCanvas.getContext(`2d`);
+    }
   }
 
   update(time: number, delta: number) {
@@ -296,7 +321,32 @@ export default class GameScene extends Phaser.Scene {
     this.zombies.getChildren().forEach((z) => {
       const zombie = z as Phaser.Physics.Arcade.Sprite;
       this.physics.moveToObject(zombie, this.player, 80);
-      // moveToObject: 좀비가 플레이어 방향으로 속도 80으로 이동
+
+      const zombieAngle = Phaser.Math.Angle.Between(
+        this.player.x,
+        this.player.y,
+        zombie.x,
+        zombie.y
+      );
+      const aimAngle = Phaser.Math.Angle.Between(
+        this.player.x,
+        this.player.y,
+        pointer.worldX,
+        pointer.worldY
+      );
+
+      const angleDiff = Math.abs(
+        Phaser.Math.Angle.Wrap(zombieAngle - aimAngle)
+      );
+
+      const coneHalfRad = ((this.isADS ? 22 : 33) * Math.PI) / 180;
+
+      if (angleDiff < coneHalfRad) {
+        zombie.setTint(0xff3333);
+        zombie.setAlpha(1.0);
+      } else {
+        zombie.setAlpha(0);
+      }
     });
 
     // === 젬 자석 효과 ===
@@ -326,6 +376,9 @@ export default class GameScene extends Phaser.Scene {
         bullet.destroy();
       }
     });
+
+    // === 플래시라이트 그리기 ===
+    this.drawFlashLight();
   }
   private startReload(): void {
     if (this.isReloading) return;
@@ -338,6 +391,104 @@ export default class GameScene extends Phaser.Scene {
       this.currentAmmo = this.magazineSize;
       this.isReloading = false;
       console.log("RELOAD COMPLETE!", this.currentAmmo, "/", this.magazineSize);
+    });
+  }
+
+  private drawFlashLight(): void {
+    const ctx = this.lightCtx;
+    if (!ctx) return;
+
+    const pointer = this.input.activePointer;
+
+    const px = this.player.x;
+    const py = this.player.y;
+
+    const aimAngle = Phaser.Math.Angle.Between(
+      px,
+      py,
+      pointer.worldX,
+      pointer.worldY
+    );
+
+    // === 화면 어둡게 칠하기 ===
+    ctx.clearRect(0, 0, 1280, 720);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(0,0,0,0.80)";
+    ctx.fillRect(0, 0, 1280, 720);
+
+    // === 빛 영역 잘라내기 ===
+    ctx.globalCompositeOperation = "destination-out";
+
+    // 발밑 원형
+    ctx.beginPath();
+    ctx.arc(px, py, 70, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.fill();
+
+    // 부채꼴 플래시라이트
+    const coneHalfDeg = this.isADS ? 22 : 33;
+    const coneRange = this.isADS ? 380 : 280;
+    const coneHalfRad = (coneHalfDeg * Math.PI) / 180;
+    const segments = 24;
+
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const angle = aimAngle - coneHalfRad + t * coneHalfRad * 2;
+      ctx.lineTo(
+        px + Math.cos(angle) * coneRange,
+        py + Math.sin(angle) * coneRange
+      );
+    }
+
+    ctx.closePath();
+    ctx.fillStyle = "rgba(255,255,255,1.0)";
+    ctx.fill();
+
+    // === 그리기 모드로 전환 (눈을 어둠 위에 그리기 위해) ===
+    ctx.globalCompositeOperation = "source-over";
+
+    // === 시야 밖 좀비 눈 빛나기 ===
+    // aimAngle은 위에서 이미 계산했으므로 재사용
+    const coneSightHalf = ((this.isADS ? 22 : 33) * Math.PI) / 180;
+
+    this.zombies.getChildren().forEach((z) => {
+      const zombie = z as Phaser.Physics.Arcade.Sprite;
+      if (!zombie.active) return;
+
+      const zombieAngle = Phaser.Math.Angle.Between(px, py, zombie.x, zombie.y);
+      const angleDiff = Math.abs(
+        Phaser.Math.Angle.Wrap(zombieAngle - aimAngle)
+      );
+
+      if (angleDiff >= coneSightHalf) {
+        const dist = Phaser.Math.Distance.Between(px, py, zombie.x, zombie.y);
+
+        if (dist > 400) return;
+
+        const brightness = 1 - dist / 400;
+        const eyeOffset = 4;
+        const perpAngle = zombieAngle + Math.PI / 2;
+
+        const leftEyeX = zombie.x + Math.cos(perpAngle) * eyeOffset;
+        const leftEyeY = zombie.y + Math.sin(perpAngle) * eyeOffset;
+
+        const rightEyeX = zombie.x - Math.cos(perpAngle) * eyeOffset;
+        const rightEyeY = zombie.y - Math.sin(perpAngle) * eyeOffset;
+
+        ctx.fillStyle = `rgba(255, 0, 0, ${brightness * 0.9})`;
+
+        ctx.beginPath();
+        ctx.arc(leftEyeX, leftEyeY, 2, 0, Math.PI * 2);
+
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(rightEyeX, rightEyeY, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
     });
   }
 }

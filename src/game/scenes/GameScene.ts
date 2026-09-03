@@ -160,6 +160,16 @@ export default class GameScene extends Phaser.Scene {
 
     // 좀비 사살 시스템
     this.physics.add.overlap(this.bullets, this.zombies, (bullet, zombie) => {
+      const z = zombie as Phaser.Physics.Arcade.Sprite;
+
+      const gem = this.gems.create(
+        z.x,
+        z.y,
+        `gem`
+      ) as Phaser.Physics.Arcade.Sprite;
+
+      gem.setData(`value`, 5);
+
       bullet.destroy();
       zombie.destroy();
     });
@@ -185,6 +195,34 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // 경험치 젬 & 레벨 시스템
+    const gameGraphics = this.make.graphics({ x: 0, y: 0 });
+
+    gameGraphics.fillStyle(0x00ffff);
+    gameGraphics.fillRect(0, 0, 8, 8);
+    gameGraphics.generateTexture(`gem`, 8, 8);
+    gameGraphics.destroy();
+
+    this.gems = this.physics.add.group();
+
+    // 젬 수집 시스템
+    this.physics.add.overlap(this.player, this.gems, (_player, gemObj) => {
+      const gem = gemObj as Phaser.Physics.Arcade.Sprite;
+      const value = gem.getData(`value`) as number;
+
+      this.currentXp += value;
+      gem.destroy();
+
+      // 레벨업 체크
+      if (this.currentXp >= this.xpToNext) {
+        this.currentXp -= this.xpToNext;
+        this.level++;
+
+        this.xpToNext = Math.floor(
+          20 + this.level * 8 + this.level * this.level * 0.5
+        );
+        console.log(`LEVEL UP Lv.${this.level} (next: ${this.xpToNext})`);
+      }
+    });
   }
 
   update(time: number, delta: number) {
@@ -259,6 +297,21 @@ export default class GameScene extends Phaser.Scene {
       const zombie = z as Phaser.Physics.Arcade.Sprite;
       this.physics.moveToObject(zombie, this.player, 80);
       // moveToObject: 좀비가 플레이어 방향으로 속도 80으로 이동
+    });
+
+    // === 젬 자석 효과 ===
+    this.gems.getChildren().forEach((g) => {
+      const gem = g as Phaser.Physics.Arcade.Sprite;
+
+      if (!gem.active) return;
+
+      const dx = this.player.x - gem.x;
+      const dy = this.player.y - gem.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < this.magnetRange) {
+        this.physics.moveToObject(gem, this.player, 300);
+      }
     });
 
     // === 화면 밖 탄환 삭제 ===

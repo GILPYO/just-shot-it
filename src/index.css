@@ -8,4 +8,31 @@
 body {
   background: #000;
   overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+@theme {
+  --font-px: "Silkscreen", ui-monospace, monospace;
+
+  --color-hud-ink: #dde3d8;
+  --color-hud-dim: #68715f;
+
+  --color-hp: #c43c31;
+  --color-hp-tip: #e85b45;
+  --color-hp-off: #33130f;
+
+  --color-sta: #c6b189;
+  --color-sta-tip: #e6d6b2;
+  --color-sta-off: #241f17;
+  --color-sta-drain: #4e4634;
+
+  --color-xp: #49a0ab;
+  --color-xp-tip: #7fdce4;
+  --color-xp-off: #12292c;
+
+  --color-amber: #e8a33d;
+  --color-amber-off: #2c2011;
 }

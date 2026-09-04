@@ -8,15 +8,17 @@ import "./hud.css";
 export default function HUD() {
   return (
     <div className="absolute inset-0 pointer-events-none z-2 font-mono">
-      <div className="absolute top-5 left-5 w-[220px] flex flex-col gap-[2px]">
+      <div className="absolute top-4 left-5 right-5">
+        <ExpBar />
+      </div>
+
+      <div className="absolute top-1/2 left-5 -translate-y-1/2 flex items-end gap-[6px]">
         <HealthBar />
         <StaminaBar />
       </div>
-      <div className="absolute bottom-12 right-6 text-right">
+
+      <div className="absolute top-1/2 right-5 -translate-y-1/2">
         <AmmoDisplay />
-      </div>
-      <div className="absolute bottom-3 left-5 right-5">
-        <ExpBar />
       </div>
     </div>
   );

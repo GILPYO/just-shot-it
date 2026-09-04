@@ -1,36 +1,29 @@
-import { useEffect, useState } from "react";
-import EventBus from "../../EventBus";
-import { type HudData } from "../../types/hud";
+import { useHud } from "../useHud";
+import { SegmentGauge } from "./SegmentGuage";
 
 export const HealthBar = () => {
-  const [hp, setHp] = useState(100);
-  const [maxHp, setMaxHp] = useState(100);
+  const hp = useHud((d) => Math.floor(d.hp), 100);
+  const maxHp = useHud((d) => d.maxHp, 100);
 
-  useEffect(() => {
-    const handler = (data: HudData) => {
-      setHp(data.hp);
-      setMaxHp(data.maxHp);
-    };
-    EventBus.on("hud-update", handler);
-
-    return () => {
-      EventBus.off("hud-update", handler);
-    };
-  }, []);
-
-  const percent = (hp / maxHp) * 100;
+  const low = hp / maxHp <= 0.28;
 
   return (
-    <div className="bg-white w-full">
-      <div className="health-bar__header">
-        <span className="health-bar__label">HP</span>
-        <span className="health-bar__value">
-          {Math.floor(hp)} / {maxHp}
-        </span>
-      </div>
-      <div className="health-bar_track">
-        <div className="bg-red-500/80" style={{ width: `${percent}%` }}></div>
-      </div>
+    <div className="flex flex-col items-center justify-center gap-[6px]">
+      <span className="hud-shadow text-[10px] text-hud-ink w-[24px] text-center">
+        {hp}
+      </span>
+
+      <SegmentGauge
+        value={hp}
+        max={maxHp}
+        count={20}
+        width={12}
+        on="#c43c31"
+        tip="#e85b45"
+        off="#33130f"
+        blink={low}
+      />
+      <span className="text-[12px] text-[#e85b45]">♥</span>
     </div>
   );
 };

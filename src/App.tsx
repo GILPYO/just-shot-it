@@ -22,7 +22,15 @@ function App() {
   }, []);
 
   return (
-    <div style={{ position: "relative", width: 1280, height: 720 }}>
+    <div
+      style={{
+        position: "relative",
+        width: 1280,
+        height: 720,
+        border: "1px solid #222",
+        overflow: "hidden",
+      }}
+    >
       <div ref={gameContainer} id="game-container" />
       <HUD />
     </div>

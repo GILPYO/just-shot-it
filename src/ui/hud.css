@@ -9,3 +9,26 @@
   --ammo-low: #e4584a;
   --text-dim: #6b7566;
 }
+@keyframes hud-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+.hud-blink {
+  animation: hud-blink 0.4s steps(2) infinite;
+}
+
+/* 도트 텍스트 그림자 — 블러 아님, 하드 오프셋 */
+.hud-shadow {
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.95);
+}
+.hud-shadow-sm {
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.95);
+}
+
+/* 세그먼트 트랙 공통 */
+.hud-track {
+  background: rgba(0, 0, 0, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(212, 224, 204, 0.13);
+}

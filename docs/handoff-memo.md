@@ -1,287 +1,146 @@
 # 인수인계 메모
 
-## Phase 1 완료 상태
+## 현재 상태: Phase 2 진행 중
 
-### ✅ 구현 완료
-
+### ✅ Phase 1 완료
 - 이동 (WASD) + 대각선 정규화
-- 달리기 (Shift) + 스태미너 (소모/회복)
-- ADS 조준사격 (우클릭) + 탄퍼짐 (hip-fire 10도 / ADS 3도)
+- 달리기 (Shift) + 스태미너
+- ADS 조준사격 (우클릭) + 탄퍼짐
 - 재장전 (R키) + 장탄수 15발
 - 좀비 스폰 (플레이어 기준 500px 원형) + 추적
 - 좀비 사살 + 피격 시스템
-- 경험치 젬 드랍 + 수집 + 자석 효과 (50px)
-- 레벨업 시스템 (경험치 곡선 적용)
+- 경험치 젬 + 레벨업 + 자석 효과
 - 카메라 팔로우 + 줌아웃 (0.5)
-- 플래시라이트 (별도 Canvas 오버레이, 5겹 부채꼴 + 끝부분 글로우)
-- 시야 밖 좀비 빨간 눈 (거리 기반 밝기)
-- 시야 시스템 (플래시라이트 안=보임, 밖=투명, 발밑 140px=무조건 보임)
-- HUD 컴포넌트 분리 (React + Tailwind)
-- EventBus로 Phaser → React 데이터 전달
+- 플래시라이트 (별도 Canvas, 5겹 부채꼴 페이드 + 글로우)
+- 시야 밖 좀비 빨간 눈
+- HUD (HP/스태미너 세그먼트 게이지 + 탄약 + 경험치바)
+- Tailwind CSS 설치 완료
+
+### ✅ Phase 2 진행 중 — 레벨업 카드 UI 기본 완성
+- `src/types/cards.ts` — CardType, LevelUpCard 타입 + 색상/라벨 상수
+- `src/ui/levelup/LevelUpCard.tsx` — 카드 1장 컴포넌트 (도트 감성)
+- `src/ui/levelup/LevelUpOverlay.tsx` — 오버레이 (배경 + 타이틀 + 카드 5장)
+- `GameScene.ts` — generateCards() + levelup-open emit + levelup-select 수신
+- `App.tsx` — EventBus 연동 + 오버레이 표시/닫기
 
 ### 🔧 다음에 할 것
 
-#### 1. HUD 디자인 시안 + 구현 (우선!)
-
-HUD 컴포넌트는 분리되어 있고 EventBus 연결도 되어있음. 디자인만 입히면 됨.
-
-**파일 구조:**
-
-```
-src/ui/
-├── HUD.tsx                ← 컨테이너 (레이아웃만)
-├── hud.css                ← CSS 변수 정의됨
-├── components/
-│   ├── HealthBar.tsx      ← EventBus 연결 완료, 스타일만 입히면 됨
-│   ├── StaminaBar.tsx     ← 뼈대만 있음
-│   ├── ExpBar.tsx         ← 뼈대만 있음
-│   └── AmmoDisplay.tsx    ← 뼈대만 있음
-src/types/
-└── hud.ts                 ← HudData 타입 정의
-```
-
-**Tailwind 설치 완료** — `className`에 바로 사용 가능.
-
-**HUD 레이아웃:**
-
-```
-┌──────────────────────────────────────────┐
-│ [HP 바]          좌상단                    │
-│ [스태미너 바]                              │
-│                                           │
-│                                           │
-│                                           │
-│                     [탄약 12/15] 우하단    │
-│                     [ADS] [RELOADING]     │
-│ LV 3 [경험치 바 ━━━━━━━━━━━━━━] 하단     │
-└──────────────────────────────────────────┘
-```
-
-**디자인 시안 요청 방법:**
-클로드 코드에게 "HUD 디자인 시안을 HTML로 만들어줘"라고 하면 브라우저에서 바로 확인 가능.
-참고할 컬러 토큰 (hud.css에 정의됨):
-
-- HP: `#e4584a` (빨강) / 배경: `#3a1512`
-- 스태미너: `#c6b189` (황토) / 배경: `#2a2418`
-- 경험치: `#79d2dc` (시안) / 배경: `#1a2e30`
-- 탄약: `#dde3d8` (밝은 회색)
-- 잔탄 부족: `#e4584a` (빨강)
-- 보조 텍스트: `#6b7566`
-
-분위기: 다크 미니멀, 도트 게임 감성, 화면 가리지 않게 얇고 작게
-
-**EventBus 데이터 수신 패턴 (모든 컴포넌트 동일):**
-
-```tsx
-import { useEffect, useState } from "react";
-import EventBus from "../../EventBus";
-import { type HudData } from "../../types/hud";
-
-export const 컴포넌트 = () => {
-  const [값, set값] = useState(초기값);
-
-  useEffect(() => {
-    const handler = (data: HudData) => {
-      set값(data.필요한값);
-    };
-    EventBus.on("hud-update", handler);
-    return () => { EventBus.off("hud-update", handler); };
-  }, []);
-
-  return ( /* tailwind로 스타일 */ );
-};
-```
-
-**GameScene에서 보내는 데이터:**
+#### 1. 카드 선택 효과 적용 (바로 이어서!)
+현재 카드 선택하면 콘솔에 index만 찍히고 실제 효과 없음.
+`GameScene.ts`의 `levelup-select` 리스너에서 TODO 부분:
 
 ```typescript
-EventBus.emit("hud-update", {
-  hp,
-  maxHp,
-  stamina,
-  maxStamina,
-  currentAmmo,
-  magazineSize,
-  level,
-  currentXp,
-  xpToNext,
-  isADS,
-  isReloading,
+EventBus.on("levelup-select", (data: { index: number }) => {
+  //TODO: 선택한 카드 효과 적용
+  this.time.delayedCall(1, () => {
+    this.input.enabled = true;
+    this.scene.resume();
+  });
 });
 ```
 
-#### 2. Phase 2 시작 (HUD 끝나면)
+generateCards()에서 만든 카드 배열을 클래스 변수에 저장해두고, 선택된 index의 카드 효과 적용 필요:
+- weapon → 보조무기/근접무기 장착
+- ammo → 탄종 장착
+- stat → 스탯 증가 (데미지/이속/HP)
+- passive → 패시브 스킬 활성화
 
-- 3무기 시스템 (주무기 직접 조준, 보조무기 자동, 근접무기 자동-고유패턴) + 6패시브
-- 최대 3무기 (주무기+보조무기+근접무기) + 6패시브 슬롯 제한
-- 무기 에볼루션 시스템 (MAX + 파츠 = 진화)
-- 보스 시스템 (10레벨마다)
-- 패시브 스킬 4종 (지뢰, 철조망, 드론, 섬광탄)
-- 레벨업 카드 5장 선택 시스템
-- 난이도 스케일링 (좀비 속도/스폰 증가)
+#### 2. 보조무기 자동 발사 시스템
+#### 3. 근접무기 자동 공격 (6종 고유 패턴)
+#### 4. 탄종 시스템 (무기별 장착, Lv.1~8)
+#### 5. 보스 시스템
+#### 6. 패시브 스킬
 
 ---
 
-## 플래시라이트 구현 기록 (중요!)
+## 카드 시스템 EventBus 흐름
+
+```
+레벨업 → GameScene: generateCards()
+       → EventBus.emit("levelup-open", {level, cards})
+       → App.tsx: setLevelUp(data) → <LevelUpOverlay> 표시
+       → 유저 카드 클릭
+       → EventBus.emit("levelup-select", {index})
+       → GameScene: 효과 적용 → delayedCall(1) → scene.resume()
+```
+
+### 카드 5장 생성 규칙
+- 1장: 무기 카드 보장
+- 4장: 전체 풀(무기/탄종/스탯/패시브)에서 랜덤
+
+---
+
+## 기획 대규모 변경 (2026-09-04)
+
+### 무기 시스템
+- 스왑 시스템 삭제
+- 3무기 + 6패시브 (딥락 서바이버 스타일)
+  - 주무기: 캐릭터 고정, 직접 조준 (교체 불가)
+  - 보조무기: 카드 획득, 자동 발사 (1개)
+  - 근접무기: 카드 획득, 자동 고유공격 (1개)
+
+### 탄종 시스템 (파츠 교체)
+- 무기별 탄종 1개 장착, Lv.1~8
+- 교체 시 Lv.1 리셋
+- 에볼루션: 주무기 MAX + 특정 탄종 = 진화
+
+### 캐릭터: 세계 특수부대 + 대표 총기
+
+### 근접무기 6종
+- 필드 대거(날아감), 구르카(선회), 장검(채찍), 철퇴(둔화), 전투도끼(360도), 마체테(연타)
+
+---
+
+## Phaser 4 pause/resume 삽질 기록 (중요!)
 
 ### ❌ 실패한 방식들
 
-| 방식                              | 왜 안 됐나                         |
-| --------------------------------- | ---------------------------------- |
-| Phaser Graphics + MULTIPLY 블렌드 | WebGL에서 블렌드모드 불안정        |
-| RenderTexture draw() + erase()    | setVisible(false) 객체 무시 버그   |
-| Phaser canvas에 직접 Canvas2D     | WebGL 모드면 getContext('2d') null |
+| 방식 | 에러 |
+|------|------|
+| `this.scene.pause()` + `this.scene.resume()` | `Cannot read properties of null (reading 'queueOp')` |
+| `this.physics.pause()` + `this.physics.resume()` | `Cannot read properties of null (reading 'resume')` |
+| `this.time.delayedCall()` 안에서 resume | pause 중에는 delayedCall 실행 안 됨 |
+| `setTimeout` + `this.scene.resume()` | 같은 queueOp 에러 |
 
-### ✅ 작동하는 방식: 별도 HTML Canvas 오버레이
+### ✅ 작동하는 방식: isPaused 플래그로 직접 관리
 
-- `document.createElement('canvas')`로 Phaser 위에 겹침
-- `pointerEvents: none` + `zIndex: 1`
-- `globalCompositeOperation: destination-out`으로 어둠에 구멍 뚫기
-- 5겹 레이어로 부드러운 페이드 + 끝부분 글로우
-
-### 좌표 변환 (줌 보정)
-
-카메라 줌 0.5 사용 중. 월드좌표 → 화면좌표 변환 공식:
+Phaser 4에서는 `scene.pause()/resume()`이 제대로 안 먹힘. **우리가 직접 플래그로 관리:**
 
 ```typescript
-const playerScreen = cam.getWorldPoint(0, 0); // 카메라 좌상단
-const screenX = (worldX - playerScreen.x) * cam.zoom;
-const screenY = (worldY - playerScreen.y) * cam.zoom;
+// 클래스 변수
+private isPaused: boolean = false;
+
+// 멈출 때 (레벨업 시)
+this.isPaused = true;
+EventBus.emit("levelup-open", { level, cards });
+
+// 재개할 때 (카드 선택 시)
+this.isPaused = false;
+
+// update() 맨 위에서 체크
+update(time: number, delta: number) {
+  if (this.isPaused) return;  // 여기서 전부 멈춤
+  // ...
+}
 ```
 
-### 시야 밖 좀비
-
-- 플래시라이트 안: `setAlpha(1.0)` + 빨간 틴트
-- 플래시라이트 밖: `setAlpha(0.01)` (0으로 하면 충돌 무시됨!)
-- 발밑 140px 이내: 무조건 보임
-- 시야 밖 좀비는 Canvas2D로 빨간 눈 2개 그림 (거리 기반 밝기)
-
----
-
----
-
-## 2026-09-01 주요 설계 변경 사항
-
-### 무기 시스템 대폭 변경: 3슬롯 스왑 → 뱀서 스타일
-
-**제거된 것:**
-- 1/2/3 키 무기 스왑 시스템 전체 제거
-- "활성 슬롯 / 비활성 슬롯" 개념 제거
-- 타입 C (무기+무기) 시너지 제거
-
-**새 시스템 (3무기 + 6패시브, Deep Rock Galactic Survivor 스타일):**
-- **주무기 (Primary) 1정**: 캐릭터 고정. 직접 조준+발사
-- **보조무기 (Secondary) 1정**: 카드 획득 (~Lv.3). 가장 가까운 적에게 자동 발사
-- **근접무기 (Melee) 1개**: 카드 획득 (~Lv.5). 자동 (무기별 고유 공격 패턴)
-- 최대 **3개 무기 + 6개 패시브**
-- 같은 무기 중복 획득 = 레벨업 (Lv.1~8)
-- 다른 무기로 슬롯 교체 시 Lv.1 리셋
-
-### 무기 에볼루션 시스템 (신규)
-
-무기 MAX(Lv.5) + 매칭 파츠 아이템 = 슈퍼 무기로 진화
-
-| 무기 (MAX) | + 파츠 | = 에볼루션 | 효과 |
-|---|---|---|---|
-| G17 | 레이저 포인터 | 레이저 핸드건 | 관통 레이저 |
-| R-870 | 머즐 브레이크 | 화염 샷건 | 화염 데미지 |
-| SMG-5 | 확장 탄창 | 미니건 | 2배 연사 + 60발 |
-| MR-4 | 홀로그램 조준기 | 스마트 라이플 | 자동 추적 |
-| Cobra .357 | 수직 손잡이 | 황금총 | 3배 크리/넉백 |
-| Arctic .308 | 전술 스톡 | 레일건 | 전체 관통+폭발 |
-
-- 에볼루션 시 파츠 소모
-- 레시피 비공개 (플레이어 발견)
-- 발견 레시피는 도감에 기록
-
-### 캐릭터 로스터 변경: 한국 테마
-
-- **기본**: 회사원 (남) — 주무기(G17)만 시작
-- **해금 7종**: 여고생, 편의점 알바, 경찰관, 소방관, 조리병, 해병, UDT
-- **히든 3종**: 태권도 사범 (총기 불가!), PC방 사장, 무당
-- 총 11종, 각 캐릭터 고유 시작 무기 + 고유 패시브
-
-### 코드 영향 (아직 미구현)
-
-- WeaponManager: 3슬롯 스왑 로직 제거 필요, 뱀서 스타일 자동발사로 교체
-- InputSystem: 1/2/3 키바인딩 제거
-- 에볼루션 시스템 신규 구현 필요
-- 캐릭터 시스템 신규 구현 필요
-
----
-
-## 2026-09-01 탄종 시스템 도입 (파츠 시스템 교체)
-
-### 변경 요약
-
-기존 **총기 파츠 시스템**(레이저 포인터, 머즐 브레이크 등 6종)을 **탄종 시스템**으로 전면 교체.
-
-### 탄종 시스템 핵심 메카닉
-
-- 각 무기에 **1개의 탄종** 장착 가능 (주무기/보조무기 각각 개별)
-- 탄종 9종: FMJ, HP, RIP, AP, 소이탄, 아음속탄, 트레이서, 산탄, 폭발탄
-- 탄종 **레벨업 가능** (Lv.1 ~ Lv.8 MAX)
-- **같은 탄종 중복 카드** → 해당 탄종 레벨업
-- **다른 탄종으로 교체** → Lv.1부터 다시 시작 (트레이드오프)
-
-### 장갑 시스템 (신규)
-
-탄종 시스템과 연동되는 적 장갑 개념 추가:
-- 탱커: 장갑 → HP/RIP탄 데미지 -50%
-- 보스: 중장갑 → HP/RIP탄 데미지 -70%
-- AP탄은 장갑 무시
-
-### 에볼루션 레시피 변경
-
-파츠 아이템 대신 **매칭 탄종 장착**이 에볼루션 조건:
-
-| 무기 (MAX) | + 탄종 | = 에볼루션 |
-|---|---|---|
-| G17 | 트레이서 | 레이저 사이트 핸드건 |
-| R-870 | 소이탄 | 드래곤 브레스 |
-| SMG-5 | FMJ | 관통 난사 |
-| MR-4 | AP | 관통 라이플 |
-| Cobra .357 | 폭발탄 | 파열탄 리볼버 |
-| Arctic .308 | 아음속탄 | 사일런트 킬러 |
-
-### 레벨업 카드 변경
-
-슬롯 구성 변경: 무기(2) + 탄종(1) + 능력치(1) + 패시브(1)
-
-### 코드 영향 (미구현)
-
-- 파츠 관련 로직 전부 탄종 시스템으로 교체 필요
-- 장갑 시스템 신규 구현 필요 (좀비 타입별 장갑 속성)
-- 탄종 레벨업/교체 UI 구현 필요
-- 에볼루션 조건 변경 (파츠 보유 → 탄종 장착)
-
----
-
-## 2026-09-01 무기 슬롯 축소: 6무기 → 3무기 (Deep Rock Galactic Survivor 스타일)
-
-### 변경 요약
-
-기존 **6무기 + 6패시브** (뱀파이어 서바이버즈 스타일)를 **3무기 + 6패시브** (Deep Rock Galactic Survivor 스타일)로 변경.
-
-### 핵심 변경
-
-- **6무기 슬롯 → 3무기 슬롯** (주무기/보조무기/근접무기 각 1개)
-- **주무기**: 캐릭터 고정, 직접 조준+발사
-- **보조무기**: ~Lv.3에 카드로 획득, 자동 발사
-- **근접무기**: ~Lv.5에 카드로 획득, 자동 (무기별 고유 공격 패턴)
-- 무기 레벨업 범위: Lv.1~8 (근접무기 포함)
-- 근접무기 목록 전면 교체: 고유 공격 스타일 6종 (필드 대거, 구르카 나이프, 장검, 철퇴, 전투 도끼, 마체테)
-- 탄종은 주무기/보조무기에만 적용 (근접무기 미적용)
-- 슬롯 교체 시 Lv.1 리셋
-
-### 코드 영향 (미구현)
-
-- WeaponManager: 6슬롯 → 3슬롯 (주무기/보조무기/근접무기) 로직 변경 필요
-- 근접무기 시스템: 고유 공격 패턴별 개별 구현 필요 (공전, 투척, 참격 등)
-- 카드 시스템: 보조무기/근접무기 카드 출현 레벨 조건 추가 필요
-
----
+**scene.pause(), physics.pause(), input.enabled 전부 사용하지 않음!**
+isPaused가 true면 update()가 return해서 게임 로직 전체가 멈추고,
+false로 바꾸면 다음 프레임부터 다시 돌아감.
 
 ## 주의사항
+- Phaser 4에서 scene.pause/resume 쓰지 마! (위 삽질 참고)
+- isPaused 플래그로 직접 관리
+- 파일명 대소문자 주의: `LevelUpOverlay.tsx` (L 대문자)
+- HUD z-index: 2 / 플래시라이트: 1 / 카드 오버레이: 50
 
-- HUD `z-index: 2` (플래시라이트 캔버스가 1)
+## 플래시라이트 좌표 변환 (줌 0.5)
+```typescript
+const playerScreen = cam.getWorldPoint(0, 0);
+const screenX = (worldX - playerScreen.x) * cam.zoom;
+```
+
+## 기획서 위치
+- `/Users/ubion/workspace/just-shot-it/CLAUDE.md`
+- `/Users/ubion/workspace/just-shot-it/docs/specs/2026-09-01-just-shot-it-design.md`
+- `/Users/ubion/workspace/just-shot-it/docs/specs/2026-09-01-game-depth-design.md`

@@ -1,3 +1,4 @@
+import { type LevelUpCard } from "./../../types/cards";
 import Phaser from "phaser";
 import EventBus from "../../EventBus";
 
@@ -48,6 +49,9 @@ export default class GameScene extends Phaser.Scene {
 
   // 재장전 타이밍용
   private reloadStartTime: number = 0;
+
+  // 게임 일시정지 (카드 선택 중)
+  private isPaused: boolean = false;
 
   constructor() {
     super(`GameScene`);
@@ -215,7 +219,9 @@ export default class GameScene extends Phaser.Scene {
         this.xpToNext = Math.floor(
           20 + this.level * 8 + this.level * this.level * 0.5
         );
-        console.log(`LEVEL UP Lv.${this.level} (next: ${this.xpToNext})`);
+        const cards = this.generateCards();
+        this.isPaused = true;
+        EventBus.emit("levelup-open", { level: this.level, cards });
       }
     });
 
@@ -239,9 +245,17 @@ export default class GameScene extends Phaser.Scene {
 
       this.lightCtx = this.lightCanvas.getContext(`2d`);
     }
+
+    // 카드 선택 완료 이벤트 수신
+    EventBus.on("levelup-select", (data: { index: number }) => {
+      //TODO: 선택한 카드 효과 적용 (Phase2 에서 구현 예정)
+      console.log("Selected card:", data.index);
+      this.isPaused = false;
+    });
   }
 
   update(time: number, delta: number) {
+    if (this.isPaused) return;  // 카드 선택 중이면 업데이트 멈춤
     const dt = delta / 1000;
 
     // === 이동 방향 계산 ===
@@ -415,6 +429,132 @@ export default class GameScene extends Phaser.Scene {
       this.isReloading = false;
       console.log("RELOAD COMPLETE!", this.currentAmmo, "/", this.magazineSize);
     });
+  }
+
+  // 레벨 업 카드 시스템
+  private generateCards(): LevelUpCard[] {
+    const weaponCards: LevelUpCard[] = [
+      {
+        id: "g17",
+        type: "weapon",
+        name: "G17",
+        description: "안정적인 권총",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+      {
+        id: "r870",
+        type: "weapon",
+        name: "R-870",
+        description: "광역 넉백 샷건",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+      {
+        id: "smg5",
+        type: "weapon",
+        name: "SMG-5",
+        description: "미친 연사 기관단총",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+    ];
+
+    const ammoCards: LevelUpCard[] = [
+      {
+        id: "fmj",
+        type: "ammo",
+        name: "FMJ",
+        description: "관통 +1",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+      {
+        id: "hp",
+        type: "ammo",
+        name: "HP",
+        description: "데미지 +40% 관통 불가",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+      {
+        id: "ap",
+        type: "ammo",
+        name: "AP",
+        description: "장갑 무시",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+    ];
+
+    const statCards: LevelUpCard[] = [
+      {
+        id: "damage_up",
+        type: "stat",
+        name: "데미지 증가",
+        description: "전체 무기 데미지 +15%",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+      {
+        id: "speed_up",
+        type: "stat",
+        name: "이동속도 증가",
+        description: "이동속도 +10%",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+      {
+        id: "hp_up",
+        type: "stat",
+        name: "HP 증가",
+        description: "최대 HP +10%",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+    ];
+
+    const passiveCard: LevelUpCard[] = [
+      {
+        id: "landmine",
+        type: "passive",
+        name: "지뢰",
+        description: "5초마다 지뢰 자동 설치",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+      {
+        id: "drone",
+        type: "passive",
+        name: "드론",
+        description: "자동 사격 드론 소환",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+      {
+        id: "barbed",
+        type: "passive",
+        name: "가시 철조망",
+        description: "주변 적에게 지속 데미지",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+    ];
+
+    const cards: LevelUpCard[] = [];
+    cards.push(weaponCards[Math.floor(Math.random() * weaponCards.length)]);
+
+    const allCards = [
+      ...weaponCards,
+      ...ammoCards,
+      ...passiveCard,
+      ...statCards,
+    ];
+    for (let i = 0; i < 4; i++) {
+      cards.push(allCards[Math.floor(Math.random() * allCards.length)]);
+    }
+
+    return cards;
   }
 
   private drawFlashLight(): void {

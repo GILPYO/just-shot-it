@@ -53,6 +53,36 @@ export default class GameScene extends Phaser.Scene {
   // 게임 일시정지 (카드 선택 중)
   private isPaused: boolean = false;
 
+  // 무슨 카드 선택했는지
+  private currentCards: LevelUpCard[] = [];
+
+  // 주 무기 시스템 ( 캐릭터별 주 무기 셋팅 )
+  private primaryWeapon = {
+    id: "g17",
+    name: "G17",
+    level: 1,
+    damage: 8,
+    fireRate: 400,
+    magazineSize: 15,
+    reloadTime: 1200,
+    bulletSpeed: 1000,
+    range: 300,
+    auto: false,
+  };
+  // 보조 무기 시스템
+  private subWeapon: {
+    id: string;
+    name: string;
+    level: number;
+    damage: number;
+    fireRate: number;
+    range: number;
+    bulletSpeed: number;
+    auto: boolean;
+  } | null;
+  // 보조 무기 발사 타이머
+  private subWeaponTimer: number = 0;
+
   constructor() {
     super(`GameScene`);
   }
@@ -72,6 +102,11 @@ export default class GameScene extends Phaser.Scene {
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setZoom(0.5);
+
+    // === 주무기 스탯을 게임 변수에 반영 ===
+    this.magazineSize = this.primaryWeapon.magazineSize;
+    this.currentAmmo = this.primaryWeapon.magazineSize;
+    this.reloadTime = this.primaryWeapon.reloadTime;
 
     // 우클릭 기본 메뉴 차단
     this.input.mouse?.disableContextMenu();
@@ -103,7 +138,7 @@ export default class GameScene extends Phaser.Scene {
       const bullet = this.bullets.create(
         this.player.x,
         this.player.y,
-        `player`
+        `player`,
       ) as Phaser.Physics.Arcade.Sprite;
 
       bullet.setScale(0.2);
@@ -114,7 +149,7 @@ export default class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         pointer.worldX,
-        pointer.worldY
+        pointer.worldY,
       );
 
       // 탄 퍼짐 계산
@@ -127,10 +162,11 @@ export default class GameScene extends Phaser.Scene {
 
       const finalAngle = baseAngle + offset;
 
-      const bulletSpeed = 1000;
+      const bulletSpeed = this.primaryWeapon.bulletSpeed;
+
       bullet.setVelocity(
         Math.cos(finalAngle) * bulletSpeed,
-        Math.sin(finalAngle) * bulletSpeed
+        Math.sin(finalAngle) * bulletSpeed,
       );
     });
 
@@ -164,7 +200,7 @@ export default class GameScene extends Phaser.Scene {
       const gem = this.gems.create(
         z.x,
         z.y,
-        `gem`
+        `gem`,
       ) as Phaser.Physics.Arcade.Sprite;
 
       gem.setData(`value`, 5);
@@ -217,11 +253,15 @@ export default class GameScene extends Phaser.Scene {
         this.level++;
 
         this.xpToNext = Math.floor(
-          20 + this.level * 8 + this.level * this.level * 0.5
+          20 + this.level * 8 + this.level * this.level * 0.5,
         );
-        const cards = this.generateCards();
+
+        this.currentCards = this.generateCards();
         this.isPaused = true;
-        EventBus.emit("levelup-open", { level: this.level, cards });
+        EventBus.emit("levelup-open", {
+          level: this.level,
+          cards: this.currentCards,
+        });
       }
     });
 
@@ -248,14 +288,16 @@ export default class GameScene extends Phaser.Scene {
 
     // 카드 선택 완료 이벤트 수신
     EventBus.on("levelup-select", (data: { index: number }) => {
-      //TODO: 선택한 카드 효과 적용 (Phase2 에서 구현 예정)
-      console.log("Selected card:", data.index);
+      const card = this.currentCards[data.index];
+      if (!card) return;
+
+      this.applyCard(card);
       this.isPaused = false;
     });
   }
 
   update(time: number, delta: number) {
-    if (this.isPaused) return;  // 카드 선택 중이면 업데이트 멈춤
+    if (this.isPaused) return; // 카드 선택 중이면 업데이트 멈춤
     const dt = delta / 1000;
 
     // === 이동 방향 계산 ===
@@ -301,7 +343,7 @@ export default class GameScene extends Phaser.Scene {
       // 달리기 안 할 때: 초당 15씩 회복
       this.stamina = Math.min(
         this.maxStamina,
-        this.stamina + this.staminaRegenRate * dt
+        this.stamina + this.staminaRegenRate * dt,
       );
     }
 
@@ -317,7 +359,7 @@ export default class GameScene extends Phaser.Scene {
       this.player.x,
       this.player.y,
       pointer.worldX,
-      pointer.worldY
+      pointer.worldY,
     );
     this.player.setRotation(angle);
 
@@ -331,7 +373,7 @@ export default class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         zombie.x,
-        zombie.y
+        zombie.y,
       );
 
       // 발밑 원형 범위 안이면 (근접)
@@ -346,17 +388,17 @@ export default class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         zombie.x,
-        zombie.y
+        zombie.y,
       );
       const aimAngle = Phaser.Math.Angle.Between(
         this.player.x,
         this.player.y,
         pointer.worldX,
-        pointer.worldY
+        pointer.worldY,
       );
 
       const angleDiff = Math.abs(
-        Phaser.Math.Angle.Wrap(zombieAngle - aimAngle)
+        Phaser.Math.Angle.Wrap(zombieAngle - aimAngle),
       );
 
       const coneHalfRad = ((this.isADS ? 15 : 33) * Math.PI) / 180;
@@ -392,12 +434,60 @@ export default class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         bullet.x,
-        bullet.y
+        bullet.y,
       );
       if (dist > 800) {
         bullet.destroy();
       }
     });
+
+    if (this.subWeapon) {
+      this.subWeaponTimer += delta;
+
+      if (this.subWeaponTimer >= this.subWeapon.fireRate) {
+        this.subWeaponTimer = 0;
+
+        let closest: Phaser.Physics.Arcade.Sprite | null = null;
+        let closestDist = this.subWeapon.range;
+
+        this.zombies.getChildren().forEach((z) => {
+          const zombie = z as Phaser.Physics.Arcade.Sprite;
+          const dist = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            zombie.x,
+
+            zombie.y,
+          );
+          if (dist < closestDist) {
+            closestDist = dist;
+            closest = zombie;
+          }
+        });
+
+        if (closest) {
+          const subAngle = Phaser.Math.Angle.Between(
+            this.player.x,
+            this.player.y,
+            (closest as Phaser.Physics.Arcade.Sprite).x,
+            (closest as Phaser.Physics.Arcade.Sprite).y,
+          );
+          const bullet = this.bullets.create(
+            this.player.x,
+            this.player.y,
+            `player`,
+          ) as Phaser.Physics.Arcade.Sprite;
+
+          bullet.setScale(0.15);
+          bullet.setTint(0x00ffff);
+
+          bullet.setVelocity(
+            Math.cos(subAngle) * this.subWeapon.bulletSpeed,
+            Math.sin(subAngle) * this.subWeapon.bulletSpeed,
+          );
+        }
+      }
+    }
 
     // === 플래시라이트 그리기 ===
     this.drawFlashLight();
@@ -557,6 +647,93 @@ export default class GameScene extends Phaser.Scene {
     return cards;
   }
 
+  // 카드 선택시 적용 시스템
+  private applyCard(card: LevelUpCard): void {
+    switch (card.type) {
+      case "stat":
+        if (card.id === "damage_up") {
+          //TODO: 데미지 시스템 만들면 적용
+          console.log("데미지 +15%");
+        }
+        if (card.id === "speed_up") {
+          this.normalSpeed *= 1.1;
+          this.sprintSpeed *= 1.1;
+          console.log("이동속도 +10%", this.normalSpeed);
+        }
+        if (card.id === "hp_up") {
+          this.maxHp = Math.floor(this.maxHp * 1.1);
+          this.hp = Math.min(this.hp + 10, this.maxHp);
+          console.log("최대HP + 10%", this.maxHp);
+        }
+        break;
+
+      case "weapon":
+        // === 주무기와 같은 총 → 주무기 레벨업 ===
+        if (card.id === this.primaryWeapon.id) {
+          this.primaryWeapon.level++;
+          console.log("주무기 레벨업! Lv.", this.primaryWeapon.level);
+          // TODO: 레벨별 발사 패턴 진화
+
+          // === 이미 가진 보조무기와 같은 총 → 보조무기 레벨업 ===
+        } else if (this.subWeapon && card.id === this.subWeapon.id) {
+          this.subWeapon.level++;
+          console.log("보조무기 레벨업! Lv.", this.subWeapon.level);
+
+          // === 새로운 총 → 보조무기로 장착 ===
+        } else {
+          // 각 무기별 스탯을 세팅
+          if (card.id === "g17") {
+            this.subWeapon = {
+              id: "g17",
+              name: "G17",
+              level: 1,
+              damage: 8,
+              fireRate: 400,
+              range: 300,
+              bulletSpeed: 800,
+              auto: false,
+            };
+          }
+          if (card.id === "r870") {
+            this.subWeapon = {
+              id: "r870",
+              name: "R-870",
+              level: 1,
+              damage: 18,
+              fireRate: 900,
+              range: 180,
+              bulletSpeed: 600,
+              auto: false,
+            };
+          }
+          if (card.id === "smg5") {
+            this.subWeapon = {
+              id: "smg5",
+              name: "SMG-5",
+              level: 1,
+              damage: 6,
+              fireRate: 120,
+              range: 250,
+              bulletSpeed: 700,
+              auto: false,
+            };
+          }
+          this.subWeaponTimer = 0; // 타이머 리셋
+          console.log("보조무기 장착:", this.subWeapon?.name);
+        }
+        break;
+
+      case "ammo":
+        //TODO 탄종 시스템 구현 후 적용 예정
+        console.log("탄종 획득", card.name);
+        break;
+      case "passive":
+        //TODO 패시브 시스템 구현 후 적용 예정
+        console.log("패시브 획득", card.name);
+        break;
+    }
+  }
+
   private drawFlashLight(): void {
     const ctx = this.lightCtx;
     if (!ctx) return;
@@ -578,7 +755,7 @@ export default class GameScene extends Phaser.Scene {
       px,
       py,
       mouseScreenX,
-      mouseScreenY
+      mouseScreenY,
     );
 
     // === 화면 어둡게 칠하기 ===
@@ -633,7 +810,7 @@ export default class GameScene extends Phaser.Scene {
         const angle = aimAngle - layerHalf + t * layerHalf * 2;
         ctx.lineTo(
           px + Math.cos(angle) * layerRange,
-          py + Math.sin(angle) * layerRange
+          py + Math.sin(angle) * layerRange,
         );
       }
 
@@ -654,7 +831,7 @@ export default class GameScene extends Phaser.Scene {
       0,
       tipX,
       tipY,
-      tipRadius
+      tipRadius,
     );
     tipGrad.addColorStop(0, "rgba(255,255,255,0.4)");
     tipGrad.addColorStop(0.5, "rgba(255,255,255,0.15)");
@@ -682,7 +859,7 @@ export default class GameScene extends Phaser.Scene {
       // 화면 좌표끼리 각도 계산
       const zombieAngle = Phaser.Math.Angle.Between(px, py, zScreenX, zScreenY);
       const angleDiff = Math.abs(
-        Phaser.Math.Angle.Wrap(zombieAngle - aimAngle)
+        Phaser.Math.Angle.Wrap(zombieAngle - aimAngle),
       );
 
       // 발밑 원형(70px) 안이면 눈 그리지 않음

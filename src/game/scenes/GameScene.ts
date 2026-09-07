@@ -110,8 +110,12 @@ export default class GameScene extends Phaser.Scene {
 
   // 패시브 시스템
   private passiveSkills: Map<string, { level: number }> = new Map();
-  private landminerTimer: number = 0;
+
+  // 지뢰
+  private landmineTimer: number = 0;
   private landmines: Phaser.Physics.Arcade.Group | null = null;
+  // 전기 철조망
+  private barbedTimer: number = 0;
 
   constructor() {
     super(`GameScene`);
@@ -663,9 +667,9 @@ export default class GameScene extends Phaser.Scene {
 
     // === 지뢰 자동 설치 ===
     if ((this, this.passiveSkills.has("landmine") && this.landmines)) {
-      this.landminerTimer += delta;
-      if (this.landminerTimer >= 5000) {
-        this.landminerTimer = 0;
+      this.landmineTimer += delta;
+      if (this.landmineTimer >= 5000) {
+        this.landmineTimer = 0;
 
         const mine = this.landmines?.create(
           this.player.x,
@@ -679,6 +683,47 @@ export default class GameScene extends Phaser.Scene {
         });
       }
     }
+
+    // 가시 철조망 ( 주변 틱 데미지 )
+    if ((this, this.passiveSkills.has("barbed"))) {
+      this.barbedTimer += delta;
+
+      if (this.barbedTimer >= 500) {
+        this.barbedTimer = 0;
+        const range = 100;
+        const damage = 3;
+
+        this.zombies.getChildren().forEach((z) => {
+          const zombie = z as Phaser.Physics.Arcade.Sprite;
+          const dist = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            zombie.x,
+            zombie.y
+          );
+
+          if (dist < range) {
+            const hp = zombie.getData("hp") ?? 20;
+            zombie.setData("hp", hp - damage);
+            zombie.setTint(0x00ff00);
+            this.time.delayedCall(100, () => {
+              if (zombie.active) zombie.clearTint();
+            });
+
+            if (hp - damage <= 0) {
+              const gem = this.gems.create(
+                zombie.x,
+                zombie.y,
+                "gem"
+              ) as Phaser.Physics.Arcade.Sprite;
+              gem.setData("value", 5);
+              zombie.destroy();
+            }
+          }
+        });
+      }
+    }
+
     // === 플래시라이트 그리기 ===
     this.drawFlashLight();
 
@@ -1011,6 +1056,16 @@ export default class GameScene extends Phaser.Scene {
             console.log("지뢰 장착!");
           }
         }
+        if (card.id === "barbed") {
+          if (this.passiveSkills.has("barbed")) {
+            const skill = this.passiveSkills.get("barbed")!;
+            skill.level++;
+            console.log("철조망 레벨업! Lv.", skill.level);
+          } else {
+            this.passiveSkills.set("barbed", { level: 1 });
+            console.log("철조망 장착!");
+          }
+        }
         break;
     }
   }
@@ -1256,5 +1311,16 @@ export default class GameScene extends Phaser.Scene {
         ctx.fill();
       }
     });
+    if (this.passiveSkills.has("barbed")) {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.beginPath();
+      ctx.arc(px, py, 100 * zoom, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(0, 255, 100, 0.3)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalCompositeOperation = "destination-out";
+    }
   }
 }

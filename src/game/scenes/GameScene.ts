@@ -79,9 +79,23 @@ export default class GameScene extends Phaser.Scene {
     range: number;
     bulletSpeed: number;
     auto: boolean;
-  } | null;
+  } | null = null;
   // 보조 무기 발사 타이머
   private subWeaponTimer: number = 0;
+
+  // 근접 무기 시스템
+  private meleeWeapon: {
+    id: string;
+    name: string;
+    level: number;
+    damage: number;
+    cooldown: number;
+    range: number;
+    speed: number;
+    pattern: string;
+  } | null = null;
+  private meleeCooldownTimer: number = 0;
+  private meleeProjectTiles: Phaser.Physics.Arcade.Group | null = null;
 
   constructor() {
     super(`GameScene`);
@@ -138,7 +152,7 @@ export default class GameScene extends Phaser.Scene {
       const bullet = this.bullets.create(
         this.player.x,
         this.player.y,
-        `player`,
+        `player`
       ) as Phaser.Physics.Arcade.Sprite;
 
       bullet.setScale(0.2);
@@ -149,7 +163,7 @@ export default class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         pointer.worldX,
-        pointer.worldY,
+        pointer.worldY
       );
 
       // 탄 퍼짐 계산
@@ -166,7 +180,7 @@ export default class GameScene extends Phaser.Scene {
 
       bullet.setVelocity(
         Math.cos(finalAngle) * bulletSpeed,
-        Math.sin(finalAngle) * bulletSpeed,
+        Math.sin(finalAngle) * bulletSpeed
       );
     });
 
@@ -200,7 +214,7 @@ export default class GameScene extends Phaser.Scene {
       const gem = this.gems.create(
         z.x,
         z.y,
-        `gem`,
+        `gem`
       ) as Phaser.Physics.Arcade.Sprite;
 
       gem.setData(`value`, 5);
@@ -211,6 +225,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 피격 시스템
     this.physics.add.overlap(this.player, this.zombies, () => {
+      if (this.isPaused) return;
       if (this.isHit) return;
 
       this.hp -= 10;
@@ -253,10 +268,16 @@ export default class GameScene extends Phaser.Scene {
         this.level++;
 
         this.xpToNext = Math.floor(
-          20 + this.level * 8 + this.level * this.level * 0.5,
+          20 + this.level * 8 + this.level * this.level * 0.5
         );
 
         this.currentCards = this.generateCards();
+        this.player.setVelocity(0, 0);
+        // 좀비도 전부 멈춤
+        this.zombies.getChildren().forEach((z) => {
+          const zombie = z as Phaser.Physics.Arcade.Sprite;
+          zombie.setVelocity(0, 0);
+        });
         this.isPaused = true;
         EventBus.emit("levelup-open", {
           level: this.level,
@@ -264,6 +285,42 @@ export default class GameScene extends Phaser.Scene {
         });
       }
     });
+
+    // 근접무기 투사체 그룹
+    const meleeGraphics = this.make.graphics({ x: 0, y: 0 });
+    meleeGraphics.fillStyle(0xffffff);
+    meleeGraphics.fillRect(0, 0, 10, 10);
+    meleeGraphics.generateTexture(`melee`, 10, 10);
+    meleeGraphics.destroy();
+
+    this.meleeProjectTiles = this.physics.add.group();
+
+    // 근접무기 -> 좀비 충돌
+    this.physics.add.overlap(
+      this.meleeProjectTiles,
+      this.zombies,
+      (proj, zombie) => {
+        const z = zombie as Phaser.Physics.Arcade.Sprite;
+        const p = proj as Phaser.Physics.Arcade.Sprite;
+
+        // 이미 때린 적은 무시
+        const hitList: Set<number> = p.getData("hitList") || new Set();
+        const zombieId = z.getData(`id`) ?? z.y + 10000 + z.x;
+
+        if (hitList.has(zombieId)) return;
+        hitList.add(zombieId);
+        p.setData(`hitList`, hitList);
+
+        // 젬 드랍 좀비 제거
+        const gem = this.gems.create(
+          z.x,
+          z.y,
+          `gem`
+        ) as Phaser.Physics.Arcade.Sprite;
+        gem.setData(`value`, 5);
+        z.destroy();
+      }
+    );
 
     // 플래시 라이트 별도 캔버스 생성
     const gameContainer = document.getElementById(`game-container`);
@@ -343,7 +400,7 @@ export default class GameScene extends Phaser.Scene {
       // 달리기 안 할 때: 초당 15씩 회복
       this.stamina = Math.min(
         this.maxStamina,
-        this.stamina + this.staminaRegenRate * dt,
+        this.stamina + this.staminaRegenRate * dt
       );
     }
 
@@ -359,7 +416,7 @@ export default class GameScene extends Phaser.Scene {
       this.player.x,
       this.player.y,
       pointer.worldX,
-      pointer.worldY,
+      pointer.worldY
     );
     this.player.setRotation(angle);
 
@@ -373,7 +430,7 @@ export default class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         zombie.x,
-        zombie.y,
+        zombie.y
       );
 
       // 발밑 원형 범위 안이면 (근접)
@@ -388,17 +445,17 @@ export default class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         zombie.x,
-        zombie.y,
+        zombie.y
       );
       const aimAngle = Phaser.Math.Angle.Between(
         this.player.x,
         this.player.y,
         pointer.worldX,
-        pointer.worldY,
+        pointer.worldY
       );
 
       const angleDiff = Math.abs(
-        Phaser.Math.Angle.Wrap(zombieAngle - aimAngle),
+        Phaser.Math.Angle.Wrap(zombieAngle - aimAngle)
       );
 
       const coneHalfRad = ((this.isADS ? 15 : 33) * Math.PI) / 180;
@@ -434,7 +491,7 @@ export default class GameScene extends Phaser.Scene {
         this.player.x,
         this.player.y,
         bullet.x,
-        bullet.y,
+        bullet.y
       );
       if (dist > 800) {
         bullet.destroy();
@@ -457,7 +514,7 @@ export default class GameScene extends Phaser.Scene {
             this.player.y,
             zombie.x,
 
-            zombie.y,
+            zombie.y
           );
           if (dist < closestDist) {
             closestDist = dist;
@@ -470,12 +527,12 @@ export default class GameScene extends Phaser.Scene {
             this.player.x,
             this.player.y,
             (closest as Phaser.Physics.Arcade.Sprite).x,
-            (closest as Phaser.Physics.Arcade.Sprite).y,
+            (closest as Phaser.Physics.Arcade.Sprite).y
           );
           const bullet = this.bullets.create(
             this.player.x,
             this.player.y,
-            `player`,
+            `player`
           ) as Phaser.Physics.Arcade.Sprite;
 
           bullet.setScale(0.15);
@@ -483,10 +540,42 @@ export default class GameScene extends Phaser.Scene {
 
           bullet.setVelocity(
             Math.cos(subAngle) * this.subWeapon.bulletSpeed,
-            Math.sin(subAngle) * this.subWeapon.bulletSpeed,
+            Math.sin(subAngle) * this.subWeapon.bulletSpeed
           );
         }
       }
+    }
+
+    // === 근접무기 자동 공격 === (보조무기와 별개!)
+    if (this.meleeWeapon && this.meleeProjectTiles) {
+      this.meleeCooldownTimer += delta;
+
+      if (this.meleeCooldownTimer >= this.meleeWeapon.cooldown) {
+        this.meleeCooldownTimer = 0;
+
+        let closest: Phaser.Physics.Arcade.Sprite | null = null;
+        let closestDist = this.meleeWeapon.range * 2;
+
+        this.zombies.getChildren().forEach((z) => {
+          const zombie = z as Phaser.Physics.Arcade.Sprite;
+          const dist = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            zombie.x,
+            zombie.y
+          );
+          if (dist < closestDist) {
+            closestDist = dist;
+            closest = zombie;
+          }
+        });
+
+        if (closest) {
+          this.fireMelee(closest as Phaser.Physics.Arcade.Sprite);
+        }
+      }
+
+      this.updateMeleeProjectTiles();
     }
 
     // === 플래시라이트 그리기 ===
@@ -523,6 +612,17 @@ export default class GameScene extends Phaser.Scene {
 
   // 레벨 업 카드 시스템
   private generateCards(): LevelUpCard[] {
+    const meleeCards: LevelUpCard[] = [
+      {
+        id: "field_dagger",
+        type: "weapon",
+        name: "필드 대거",
+        description: "적에게 날아갔다 돌아오는 나이프",
+        levelFrom: 0,
+        levelTo: 1,
+      },
+    ];
+
     const weaponCards: LevelUpCard[] = [
       {
         id: "g17",
@@ -639,6 +739,7 @@ export default class GameScene extends Phaser.Scene {
       ...ammoCards,
       ...passiveCard,
       ...statCards,
+      ...meleeCards,
     ];
     for (let i = 0; i < 4; i++) {
       cards.push(allCards[Math.floor(Math.random() * allCards.length)]);
@@ -668,6 +769,32 @@ export default class GameScene extends Phaser.Scene {
         break;
 
       case "weapon":
+        // === 근접 무기 체크 ===
+        if (card.id == "field_dagger") {
+          if (this.meleeWeapon && this.meleeWeapon.id == "field_dagger") {
+            this.meleeWeapon.level++;
+            this.meleeWeapon.damage += 3;
+            this.meleeWeapon.cooldown = Math.max(
+              800,
+              this.meleeWeapon.cooldown - 100
+            );
+            console.log("근접무기 레벨 업! Lv.", this.meleeWeapon.level);
+          } else {
+            this.meleeWeapon = {
+              id: "field_dagger",
+              name: "필드 대거",
+              level: 1,
+              damage: 15,
+              cooldown: 2000,
+              range: 200,
+              speed: 350,
+              pattern: "boomerang",
+            };
+            console.log("근접무기 장착 : 필드 대거");
+          }
+          break;
+        }
+
         // === 주무기와 같은 총 → 주무기 레벨업 ===
         if (card.id === this.primaryWeapon.id) {
           this.primaryWeapon.level++;
@@ -734,6 +861,91 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  private fireMelee(target: Phaser.Physics.Arcade.Sprite): void {
+    if (!this.meleeWeapon || !this.meleeProjectTiles) return;
+
+    const proj = this.meleeProjectTiles.create(
+      this.player.x,
+      this.player.y,
+      `melee`
+    ) as Phaser.Physics.Arcade.Sprite;
+
+    proj.setTint(0xff8800);
+    proj.setData(`hitList`, new Set());
+
+    if (this.meleeWeapon.pattern == `boomerang`) {
+      const angle = Phaser.Math.Angle.Between(
+        this.player.x,
+        this.player.y,
+        target.x,
+        target.y
+      );
+
+      // 날아갈 목표 지점
+      const targetX = this.player.x + Math.cos(angle) * this.meleeWeapon.range;
+      const targetY = this.player.y + Math.sin(angle) * this.meleeWeapon.range;
+
+      proj.setData("state", "flying");
+      proj.setData("targetX", targetX);
+      proj.setData("targetY", targetY);
+      proj.setData("speed", this.meleeWeapon.speed);
+
+      // 목표 방향으로 발사
+      proj.setVelocity(
+        Math.cos(angle) * this.meleeWeapon.speed,
+        Math.sin(angle) * this.meleeWeapon.speed
+      );
+    }
+  }
+
+  private updateMeleeProjectTiles(): void {
+    if (!this.meleeProjectTiles) return;
+
+    this.meleeProjectTiles.getChildren().forEach((p) => {
+      const proj = p as Phaser.Physics.Arcade.Sprite;
+      if (!proj.active) return;
+
+      const state = proj.getData(`state`);
+
+      if (state == `flying`) {
+        const targetX = proj.getData(`targetX`);
+        const targetY = proj.getData(`targetY`);
+        const dist = Phaser.Math.Distance.Between(
+          proj.x,
+          proj.y,
+          targetX,
+          targetY
+        );
+
+        if (dist < 20) {
+          proj.setData(`state`, `returning`);
+          proj.setData(`hitList`, new Set());
+        }
+      }
+
+      if (state === `returning`) {
+        const angle = Phaser.Math.Angle.Between(
+          proj.x,
+          proj.y,
+          this.player.x,
+          this.player.y
+        );
+        const speed = proj.getData(`speed`) * 1.2;
+        proj.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+
+        const dist = Phaser.Math.Distance.Between(
+          proj.x,
+          proj.y,
+          this.player.x,
+          this.player.y
+        );
+        if (dist < 30) {
+          proj.destroy();
+        }
+      }
+    });
+  }
+
   private drawFlashLight(): void {
     const ctx = this.lightCtx;
     if (!ctx) return;
@@ -755,7 +967,7 @@ export default class GameScene extends Phaser.Scene {
       px,
       py,
       mouseScreenX,
-      mouseScreenY,
+      mouseScreenY
     );
 
     // === 화면 어둡게 칠하기 ===
@@ -810,7 +1022,7 @@ export default class GameScene extends Phaser.Scene {
         const angle = aimAngle - layerHalf + t * layerHalf * 2;
         ctx.lineTo(
           px + Math.cos(angle) * layerRange,
-          py + Math.sin(angle) * layerRange,
+          py + Math.sin(angle) * layerRange
         );
       }
 
@@ -831,7 +1043,7 @@ export default class GameScene extends Phaser.Scene {
       0,
       tipX,
       tipY,
-      tipRadius,
+      tipRadius
     );
     tipGrad.addColorStop(0, "rgba(255,255,255,0.4)");
     tipGrad.addColorStop(0.5, "rgba(255,255,255,0.15)");
@@ -859,7 +1071,7 @@ export default class GameScene extends Phaser.Scene {
       // 화면 좌표끼리 각도 계산
       const zombieAngle = Phaser.Math.Angle.Between(px, py, zScreenX, zScreenY);
       const angleDiff = Math.abs(
-        Phaser.Math.Angle.Wrap(zombieAngle - aimAngle),
+        Phaser.Math.Angle.Wrap(zombieAngle - aimAngle)
       );
 
       // 발밑 원형(70px) 안이면 눈 그리지 않음

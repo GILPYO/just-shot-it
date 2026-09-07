@@ -5,7 +5,7 @@ import Phaser from "phaser";
 import HUD from "./ui/HUD";
 import EventBus from "./EventBus";
 import type { LevelUpCard } from "./types/cards";
-import { LevelUpOverlay } from "./ui/levelup/LevelUpOverlay";
+import { LevelUpOverlay } from "./ui/levelup/levelUpOverlay";
 
 function App() {
   const gameContainer = useRef<HTMLDivElement>(null);

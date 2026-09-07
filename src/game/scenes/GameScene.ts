@@ -97,6 +97,17 @@ export default class GameScene extends Phaser.Scene {
   private meleeCooldownTimer: number = 0;
   private meleeProjectTiles: Phaser.Physics.Arcade.Group | null = null;
 
+  // 탄종 시스템
+  private primaryAmmo: {
+    id: string;
+    name: string;
+    level: number;
+    maxLevel: number;
+    penetration: number;
+    damageMultiplier: number;
+    special: string;
+  } | null = null;
+
   constructor() {
     super(`GameScene`);
   }
@@ -198,6 +209,8 @@ export default class GameScene extends Phaser.Scene {
       delay: 2000,
       loop: true,
       callback: () => {
+        if (this.isPaused) return; // 카드 선택 중 스폰 멈춤!
+
         const angle = Math.random() * Math.PI * 2;
         const distance = 500;
         const x = this.player.x + Math.cos(angle) * distance;
@@ -209,6 +222,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 좀비 사살 시스템
     this.physics.add.overlap(this.bullets, this.zombies, (bullet, zombie) => {
+      if (this.isPaused) return; // 카드 선택 중 사살 멈춤!
       const z = zombie as Phaser.Physics.Arcade.Sprite;
 
       const gem = this.gems.create(
@@ -851,9 +865,54 @@ export default class GameScene extends Phaser.Scene {
         break;
 
       case "ammo":
-        //TODO 탄종 시스템 구현 후 적용 예정
-        console.log("탄종 획득", card.name);
+        // 주무기에 같은 탄종이면 레벨 업
+        if (this.primaryAmmo && this.primaryAmmo.id == card.id) {
+          if (this.primaryAmmo.level < this.primaryAmmo.maxLevel) {
+            this.primaryAmmo.level++;
+            console.log(
+              "탄종 레벨 업!",
+              this.primaryAmmo.name,
+              this.primaryAmmo.level
+            );
+          }
+        } else {
+          // 새 탄종 장착 ( 기존 탄종 리셋 )
+          if (card.id == "fmj") {
+            this.primaryAmmo = {
+              id: "fmj",
+              name: "FMJ",
+              level: 1,
+              maxLevel: 8,
+              penetration: 1,
+              damageMultiplier: 1.0,
+              special: "none",
+            };
+          }
+          if (card.id == "hp") {
+            this.primaryAmmo = {
+              id: "hp",
+              name: "HP",
+              level: 1,
+              maxLevel: 8,
+              penetration: 0,
+              damageMultiplier: 1.4,
+              special: "none",
+            };
+          }
+          if (card.id == "ap") {
+            this.primaryAmmo = {
+              id: "ap",
+              name: "AP",
+              level: 1,
+              maxLevel: 8,
+              penetration: 2,
+              damageMultiplier: 0.9,
+              special: "armor_ignore",
+            };
+          }
+        }
         break;
+
       case "passive":
         //TODO 패시브 시스템 구현 후 적용 예정
         console.log("패시브 획득", card.name);

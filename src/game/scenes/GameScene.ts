@@ -116,6 +116,9 @@ export default class GameScene extends Phaser.Scene {
   private landmines: Phaser.Physics.Arcade.Group | null = null;
   // 전기 철조망
   private barbedTimer: number = 0;
+  // 드론
+  private droneAngle: number = 0;
+  private droneFireTimer: number = 0;
 
   constructor() {
     super(`GameScene`);
@@ -724,6 +727,52 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
+    if (this.passiveSkills.has("drone")) {
+      this.droneAngle += delta * 0.002;
+      const droneX = this.player.x + Math.cos(this.droneAngle) * 60;
+      const droneY = this.player.y + Math.sin(this.droneAngle) * 60;
+
+      this.droneFireTimer += delta;
+      if (this.droneFireTimer >= 1000) {
+        this.droneFireTimer = 0;
+
+        let closest: Phaser.Physics.Arcade.Sprite | null = null;
+        let closestDist = 300;
+
+        this.zombies.getChildren().forEach((z) => {
+          const zombie = z as Phaser.Physics.Arcade.Sprite;
+          const dist = Phaser.Math.Distance.Between(
+            droneX,
+            droneY,
+            zombie.x,
+            zombie.y
+          );
+          if (dist < closestDist) {
+            closestDist = dist;
+            closest = zombie;
+          }
+        });
+
+        if (closest) {
+          const target = closest as Phaser.Physics.Arcade.Sprite;
+          const angle = Phaser.Math.Angle.Between(
+            droneX,
+            droneY,
+            target.x,
+            target.y
+          );
+          const bullet = this.bullets.create(
+            droneX,
+            droneY,
+            "player"
+          ) as Phaser.Physics.Arcade.Sprite;
+          bullet.setScale(0.1);
+          bullet.setTint(0xff00ff);
+          bullet.setVelocity(Math.cos(angle) * 500, Math.sin(angle) * 500);
+        }
+      }
+    }
+
     // === 플래시라이트 그리기 ===
     this.drawFlashLight();
 
@@ -1066,6 +1115,16 @@ export default class GameScene extends Phaser.Scene {
             console.log("철조망 장착!");
           }
         }
+        if (card.id === "drone") {
+          if (this.passiveSkills.has("drone")) {
+            const skill = this.passiveSkills.get("drone")!;
+            skill.level++;
+            console.log("드론 레벨업! Lv.", skill.level);
+          } else {
+            this.passiveSkills.set("drone", { level: 1 });
+            console.log("드론 장착!");
+          }
+        }
         break;
     }
   }
@@ -1321,6 +1380,18 @@ export default class GameScene extends Phaser.Scene {
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.globalCompositeOperation = "destination-out";
+    }
+    // --- 드론 시각화 ---
+    if (this.passiveSkills.has("drone")) {
+      const droneScreenX =
+        (this.player.x + Math.cos(this.droneAngle) * 60 - playerScreen.x) *
+        zoom;
+      const droneScreenY =
+        (this.player.y + Math.sin(this.droneAngle) * 60 - playerScreen.y) *
+        zoom;
+
+      ctx.fillStyle = "rgba(255, 0, 255, 0.8)"; // 보라색
+      ctx.fillRect(droneScreenX - 4, droneScreenY - 4, 8, 8);
     }
   }
 }

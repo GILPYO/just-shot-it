@@ -108,6 +108,11 @@ export default class GameScene extends Phaser.Scene {
     special: string;
   } | null = null;
 
+  // 패시브 시스템
+  private passiveSkills: Map<string, { level: number }> = new Map();
+  private landminerTimer: number = 0;
+  private landmines: Phaser.Physics.Arcade.Group | null = null;
+
   constructor() {
     super(`GameScene`);
   }
@@ -216,7 +221,12 @@ export default class GameScene extends Phaser.Scene {
         const x = this.player.x + Math.cos(angle) * distance;
         const y = this.player.y + Math.sin(angle) * distance;
 
-        this.zombies.create(x, y, "zombie");
+        const zombie = this.zombies.create(
+          x,
+          y,
+          "zombie"
+        ) as Phaser.Physics.Arcade.Sprite;
+        zombie.setData("hp", 20);
       },
     });
 
@@ -225,16 +235,34 @@ export default class GameScene extends Phaser.Scene {
       if (this.isPaused) return; // 카드 선택 중 사살 멈춤!
       const z = zombie as Phaser.Physics.Arcade.Sprite;
 
-      const gem = this.gems.create(
-        z.x,
-        z.y,
-        `gem`
-      ) as Phaser.Physics.Arcade.Sprite;
+      // 탄종 데미지 배율 적용
+      const ammoMult = this.primaryAmmo ? this.primaryAmmo.damageMultiplier : 1;
+      const damage = this.primaryWeapon.damage * ammoMult;
 
-      gem.setData(`value`, 5);
+      // 좀비 HP 감소
+      const currentHp = z.getData("hp") ?? 20;
+      const newHp = currentHp - damage;
+      z.setData("hp", newHp);
+
+      // 피격 이벤트 ( 하얀색 )
+      z.setTint(0xffffff);
+      this.time.delayedCall(50, () => {
+        if (z.active) z.clearTint();
+      });
 
       bullet.destroy();
-      zombie.destroy();
+
+      // HP 0 이하면 사망
+      if (newHp <= 0) {
+        const gem = this.gems.create(
+          z.x,
+          z.y,
+          `gem`
+        ) as Phaser.Physics.Arcade.Sprite;
+
+        gem.setData(`value`, 5);
+        z.destroy();
+      }
     });
 
     // 피격 시스템
@@ -335,6 +363,47 @@ export default class GameScene extends Phaser.Scene {
         z.destroy();
       }
     );
+
+    // 지뢰 시스템
+    const mineGraphics = this.make.graphics({ x: 0, y: 0 });
+    mineGraphics.fillStyle(0xff0000);
+    mineGraphics.fillCircle(6, 6, 6);
+    mineGraphics.generateTexture("mine", 12, 12);
+    mineGraphics.destroy();
+
+    this.landmines = this.physics.add.group();
+
+    // 지뢰 -> 좀비 충돌
+    this.physics.add.overlap(this.landmines, this.zombies, (mine, zombie) => {
+      if (this.isPaused) return;
+      const m = mine as Phaser.Physics.Arcade.Sprite;
+      const z = mine as Phaser.Physics.Arcade.Sprite;
+
+      // 폭발 후 주변 데미지
+      this.zombies.getChildren().forEach((zz) => {
+        const zTarget = zz as Phaser.Physics.Arcade.Sprite;
+        const dist = Phaser.Math.Distance.Between(
+          m.x,
+          m.y,
+          zTarget.x,
+          zTarget.y
+        );
+        if (dist < 80) {
+          const hp = zTarget.getData("hp") ?? 20;
+          zTarget.setData("hp", hp - 25);
+          if (hp - 25 <= 0) {
+            const gem = this.gems.create(
+              zTarget.x,
+              zTarget.y,
+              "gem"
+            ) as Phaser.Physics.Arcade.Sprite;
+            gem.setData("value", 5);
+            zTarget.destroy();
+          }
+        }
+      });
+      m.destroy();
+    });
 
     // 플래시 라이트 별도 캔버스 생성
     const gameContainer = document.getElementById(`game-container`);
@@ -592,6 +661,24 @@ export default class GameScene extends Phaser.Scene {
       this.updateMeleeProjectTiles();
     }
 
+    // === 지뢰 자동 설치 ===
+    if ((this, this.passiveSkills.has("landmine") && this.landmines)) {
+      this.landminerTimer += delta;
+      if (this.landminerTimer >= 5000) {
+        this.landminerTimer = 0;
+
+        const mine = this.landmines?.create(
+          this.player.x,
+          this.player.y,
+          "mine"
+        ) as Phaser.Physics.Arcade.Sprite;
+
+        // 안 밟히면 30초후 소멸
+        this.time.delayedCall(30000, () => {
+          if (mine.active) mine.destroy();
+        });
+      }
+    }
     // === 플래시라이트 그리기 ===
     this.drawFlashLight();
 
@@ -914,8 +1001,16 @@ export default class GameScene extends Phaser.Scene {
         break;
 
       case "passive":
-        //TODO 패시브 시스템 구현 후 적용 예정
-        console.log("패시브 획득", card.name);
+        if (card.id === "landmine") {
+          if (this.passiveSkills.has("landmine")) {
+            const skill = this.passiveSkills.get("landmine")!;
+            skill.level++;
+            console.log("지뢰 업그레이드", skill.level);
+          } else {
+            this.passiveSkills.set("landmine", { level: 1 });
+            console.log("지뢰 장착!");
+          }
+        }
         break;
     }
   }

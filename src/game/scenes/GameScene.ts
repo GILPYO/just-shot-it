@@ -235,12 +235,21 @@ export default class GameScene extends Phaser.Scene {
         const x = this.player.x + Math.cos(angle) * distance;
         const y = this.player.y + Math.sin(angle) * distance;
 
-        const zombie = this.zombies.create(
-          x,
-          y,
-          "zombie"
-        ) as Phaser.Physics.Arcade.Sprite;
-        zombie.setData("hp", 20);
+        const spawnCount = Math.floor(1 + this.level * 0.25);
+        for (let s = 0; s < spawnCount; s++) {
+          const sAngle = Math.random() * Math.PI * 2;
+          const sx = this.player.x + Math.cos(sAngle) * distance;
+          const sy = this.player.y + Math.sin(sAngle) * distance;
+          const zombie = this.zombies.create(
+            sx,
+            sy,
+            "zombie"
+          ) as Phaser.Physics.Arcade.Sprite;
+          const tier = Math.floor((this.level - 1) / 10);
+          const posInTier = (this.level - 1) % 10;
+          const tierGrowth = posInTier <= 2 ? 0 : (posInTier - 2) * 3;
+          zombie.setData("hp", 8 + tier * 20 + tierGrowth);
+        }
       },
     });
 
@@ -538,7 +547,10 @@ export default class GameScene extends Phaser.Scene {
     // === 좀비 추적 + 시야 시스템 ===
     this.zombies.getChildren().forEach((z) => {
       const zombie = z as Phaser.Physics.Arcade.Sprite;
-      this.physics.moveToObject(zombie, this.player, 80);
+      const zombieSpeed = zombie.getData("isBoss")
+        ? 50
+        : Math.min(150, 80 + this.level * 1.5);
+      this.physics.moveToObject(zombie, this.player, zombieSpeed);
 
       // 플레이어와 좀비 사이 거리
       const distToZombie = Phaser.Math.Distance.Between(

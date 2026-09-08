@@ -126,6 +126,7 @@ export default class GameScene extends Phaser.Scene {
   private bossHp: number = 0;
   private bossMaxHp: number = 0;
   private bossNumber: number = 0;
+  private killCount: number = 0;
 
   constructor() {
     super(`GameScene`);
@@ -291,7 +292,7 @@ export default class GameScene extends Phaser.Scene {
         } else {
           gem.setData("value", 5);
         }
-
+        this.killCount++;
         z.destroy();
       }
     });
@@ -312,8 +313,26 @@ export default class GameScene extends Phaser.Scene {
       });
 
       if (this.hp <= 0) {
-        console.log("GAME OVER!");
-        this.scene.pause();
+        this.hp = 0;
+        EventBus.emit("hud-update", {
+          hp: 0,
+          maxHp: this.maxHp,
+          stamina: this.stamina,
+          maxStamina: this.maxStamina,
+          currentAmmo: this.currentAmmo,
+          magazineSize: this.magazineSize,
+          level: this.level,
+          currentXp: this.currentXp,
+          xpToNext: this.xpToNext,
+          isADS: this.isADS,
+          isReloading: this.isReloading,
+        });
+        this.isPaused = true;
+        EventBus.emit("game-over", {
+          level: this.level,
+          kills: this.killCount,
+          bossKills: this.bossNumber,
+        });
       }
     });
 

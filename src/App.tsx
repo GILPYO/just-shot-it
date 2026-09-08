@@ -5,7 +5,8 @@ import Phaser from "phaser";
 import HUD from "./ui/HUD";
 import EventBus from "./EventBus";
 import type { LevelUpCard } from "./types/cards";
-import { LevelUpOverlay } from "./ui/levelup/levelUpOverlay";
+import { LevelUpOverlay } from "./ui/levelup/LevelUpOverlay";
+import { GameOver } from "./ui/GameOver";
 
 function App() {
   const gameContainer = useRef<HTMLDivElement>(null);
@@ -14,6 +15,12 @@ function App() {
   const [levelUp, setLevelUp] = useState<{
     level: number;
     cards: LevelUpCard[];
+  } | null>(null);
+
+  const [gameOver, setGameOver] = useState<{
+    level: number;
+    kills: number;
+    bossKills: number;
   } | null>(null);
 
   useEffect(() => {
@@ -25,6 +32,15 @@ function App() {
     };
     EventBus.on("levelup-open", handleOpen);
 
+    const handleGameOver = (data: {
+      level: number;
+      kills: number;
+      bossKills: number;
+    }) => {
+      setGameOver(data);
+    };
+    EventBus.on("game-over", handleGameOver);
+
     // 그 다음 게임 생성
     const game = new Phaser.Game({
       ...gameConfig,
@@ -34,6 +50,7 @@ function App() {
 
     return () => {
       EventBus.off("levelup-open", handleOpen);
+      EventBus.off("game-over", handleGameOver);
       game.destroy(true);
     };
   }, []);
@@ -62,6 +79,18 @@ function App() {
           level={levelUp.level}
           cards={levelUp.cards}
           onSelect={handleSelect}
+        />
+      )}
+      {gameOver && (
+        <GameOver
+          level={gameOver.level}
+          kills={gameOver.kills}
+          bossKills={gameOver.bossKills}
+          onRestart={() => {
+            setGameOver(null);
+            // TODO: 게임 재시작 로직
+            window.location.reload();
+          }}
         />
       )}
     </div>

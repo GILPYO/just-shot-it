@@ -120,6 +120,13 @@ export default class GameScene extends Phaser.Scene {
   private droneAngle: number = 0;
   private droneFireTimer: number = 0;
 
+  // 보스 시스템
+  private bossActive: boolean = false;
+  private bossSprite: Phaser.Physics.Arcade.Sprite | null = null;
+  private bossHp: number = 0;
+  private bossMaxHp: number = 0;
+  private bossNumber: number = 0;
+
   constructor() {
     super(`GameScene`);
   }
@@ -264,10 +271,18 @@ export default class GameScene extends Phaser.Scene {
         const gem = this.gems.create(
           z.x,
           z.y,
-          `gem`
+          "gem"
         ) as Phaser.Physics.Arcade.Sprite;
 
-        gem.setData(`value`, 5);
+        if (z.getData("isBoss")) {
+          gem.setData("value", 50);
+          this.bossActive = false;
+          this.bossSprite = null;
+          console.log(`보스 ${this.bossNumber} 처치!`);
+        } else {
+          gem.setData("value", 5);
+        }
+
         z.destroy();
       }
     });
@@ -327,6 +342,9 @@ export default class GameScene extends Phaser.Scene {
           const zombie = z as Phaser.Physics.Arcade.Sprite;
           zombie.setVelocity(0, 0);
         });
+        if (this.level % 10 == 0 && !this.bossActive) {
+          this.spawnBoss();
+        }
         this.isPaused = true;
         EventBus.emit("levelup-open", {
           level: this.level,
@@ -411,6 +429,13 @@ export default class GameScene extends Phaser.Scene {
       });
       m.destroy();
     });
+
+    // 보스 텍스처
+    const bossGraphics = this.make.graphics({ x: 0, y: 0 });
+    bossGraphics.fillStyle(0x9900ff);
+    bossGraphics.fillRect(0, 0, 56, 56);
+    bossGraphics.generateTexture("boss", 56, 56);
+    bossGraphics.destroy();
 
     // 플래시 라이트 별도 캔버스 생성
     const gameContainer = document.getElementById(`game-container`);
@@ -773,6 +798,12 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
+    /// === 보스 행동 ===
+    if (this.bossActive && this.bossSprite && this.bossSprite.active) {
+      this.physics.moveToObject(this.bossSprite, this.player, 50);
+      this.bossSprite.setAlpha(1.0);
+    }
+
     // === 플래시라이트 그리기 ===
     this.drawFlashLight();
 
@@ -803,6 +834,33 @@ export default class GameScene extends Phaser.Scene {
       this.isReloading = false;
       console.log("RELOAD COMPLETE!", this.currentAmmo, "/", this.magazineSize);
     });
+  }
+
+  private spawnBoss(): void {
+    this.bossNumber++;
+    this.bossMaxHp = 200 * this.bossNumber;
+    this.bossHp = this.bossMaxHp;
+    this.bossActive = true;
+
+    const pointer = this.input.activePointer;
+    const angle = Phaser.Math.Angle.Between(
+      this.player.x,
+      this.player.y,
+      pointer.worldX,
+      pointer.worldY
+    );
+    const x = this.player.x + Math.cos(angle) * 300;
+    const y = this.player.y + Math.sin(angle) * 300;
+
+    this.bossSprite = this.zombies.create(
+      x,
+      y,
+      "boss"
+    ) as Phaser.Physics.Arcade.Sprite;
+    this.bossSprite.setData("hp", this.bossMaxHp);
+    this.bossSprite.setData("isBoss", true);
+
+    console.log(`보스 ${this.bossNumber} 등장! HP: ${this.bossMaxHp}`);
   }
 
   // 레벨 업 카드 시스템

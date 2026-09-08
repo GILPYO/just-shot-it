@@ -85,7 +85,7 @@ export default function MainMenu({ onStart }: MainMenuProps) {
   return (
     <section
       ref={hostRef}
-      aria-label="Just Shot It main menu"
+      aria-label="Just Shoot It main menu"
       className="just-shot-menu pointer-events-auto absolute inset-0 z-50 isolate overflow-hidden bg-black text-[#d1d5d3]"
       onClick={stopPropagation}
       onPointerDown={stopPropagation}
@@ -141,7 +141,7 @@ export default function MainMenu({ onStart }: MainMenuProps) {
             ref={logoRef}
             className="jsi-logo m-0 font-bold text-[#d8d9d2] [text-shadow:4px_4px_0_#000]"
           >
-            JUST <span className="text-[#E4584A]">SHOT</span> IT!
+            JUST <span className="text-[#E4584A]">SHOOT</span> IT!
           </h1>
           <div className="absolute left-[6px] top-[130px] flex w-[532px] items-center gap-3">
             <span aria-hidden="true" className="h-[2px] flex-1 bg-[#bac1bd]" />

@@ -7,6 +7,7 @@ import EventBus from "./EventBus";
 import type { LevelUpCard } from "./types/cards";
 import { LevelUpOverlay } from "./ui/levelup/LevelUpOverlay";
 import { GameOver } from "./ui/GameOver";
+import MainMenu from "./ui/MainMenu";
 
 function App() {
   const gameContainer = useRef<HTMLDivElement>(null);
@@ -22,6 +23,8 @@ function App() {
     kills: number;
     bossKills: number;
   } | null>(null);
+
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     if (!gameContainer.current) return;
@@ -90,6 +93,15 @@ function App() {
             setGameOver(null);
             // TODO: 게임 재시작 로직
             window.location.reload();
+          }}
+        />
+      )}
+
+      {!started && (
+        <MainMenu
+          onStart={() => {
+            setStarted(true);
+            EventBus.emit("game-start");
           }}
         />
       )}

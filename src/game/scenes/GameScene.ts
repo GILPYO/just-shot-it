@@ -51,7 +51,7 @@ export default class GameScene extends Phaser.Scene {
   private reloadStartTime: number = 0;
 
   // 게임 일시정지 (카드 선택 중)
-  private isPaused: boolean = false;
+  private isPaused: boolean = true;
 
   // 무슨 카드 선택했는지
   private currentCards: LevelUpCard[] = [];
@@ -492,6 +492,11 @@ export default class GameScene extends Phaser.Scene {
       if (!card) return;
 
       this.applyCard(card);
+      this.isPaused = false;
+    });
+
+    // 메인메뉴에서 게임 시작
+    EventBus.on("game-start", () => {
       this.isPaused = false;
     });
   }

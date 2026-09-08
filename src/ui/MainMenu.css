@@ -1,0 +1,82 @@
+.just-shot-menu {
+  font-family: "Silkscreen", ui-monospace, monospace;
+}
+
+/* Keep browser / application defaults from rounding any part of this menu. */
+.just-shot-menu,
+.just-shot-menu *,
+.just-shot-menu *::before,
+.just-shot-menu *::after {
+  border-radius: 0;
+}
+
+/*
+ * Masks are calibrated to the generated MAIN MENU image, displayed at 1280x720.
+ * Solid regions hide its original title, menu, controls and left-side caption.
+ * The short gradient tails only blend the outside edges into the scene.
+ * This hides artwork; it does not reconstruct the scene behind the original UI.
+ * Remove this rule / element when switching to a background-only image.
+ */
+.jsi-baked-ui-mask {
+  background-image:
+    linear-gradient(90deg, #030607 0 96%, transparent 100%),
+    linear-gradient(90deg, #030607 0 94%, transparent 100%),
+    linear-gradient(90deg, #030607 0 95%, transparent 100%),
+    linear-gradient(90deg, #030607 0 90%, transparent 100%),
+    linear-gradient(90deg, transparent, #030607 16% 100%),
+    linear-gradient(90deg, transparent, #030607 20% 100%);
+  background-size: 690px 200px, 390px 270px, 494px 232px, 76px 98px, 100px 125px, 150px 110px;
+  background-position: 0 0, 0 200px, 0 450px, 576px 190px, 1180px 0, 1130px 610px;
+  background-repeat: no-repeat;
+}
+
+.jsi-logo {
+  width: max-content;
+  white-space: nowrap;
+  font-size: 106px;
+  line-height: 1;
+  letter-spacing: -6px;
+  transform: scaleX(var(--jsi-logo-scale, 0.74));
+  transform-origin: left center;
+  animation: jsi-title-flicker 8s steps(1, end) infinite;
+}
+
+.jsi-vignette {
+  background: radial-gradient(
+    ellipse at 66% 52%,
+    transparent 26%,
+    rgb(0 0 0 / 0.08) 68%,
+    rgb(0 0 0 / 0.48) 100%
+  );
+}
+
+.jsi-scanlines {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    rgb(0 0 0 / 0.17) 2px 4px
+  );
+}
+
+.jsi-start-arrow {
+  animation: jsi-arrow-step 1.4s steps(2, end) infinite;
+}
+
+@keyframes jsi-title-flicker {
+  0%, 92%, 96%, 100% { opacity: 1; }
+  94% { opacity: 0.84; }
+}
+
+@keyframes jsi-arrow-step {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .just-shot-menu *,
+  .just-shot-menu *::before,
+  .just-shot-menu *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -128,22 +128,55 @@ export default class GameScene extends Phaser.Scene {
   private bossNumber: number = 0;
   private killCount: number = 0;
 
+  // 총구(muzzle) 시스템
+  private muzzleData: Record<string, [number, number][]> = {};
+  private currentRow: number = 0;
+  private currentWalkFrame: number = 0;
+  private readonly DIRS = ["s", "se", "e", "ne", "n", "nw", "w", "sw"];
+
   constructor() {
     super(`GameScene`);
   }
 
+  preload() {
+    this.load.spritesheet(
+      "hero_walk",
+      "/assets/sprites/player/hero80_walk8.png",
+      {
+        frameWidth: 96,
+        frameHeight: 96,
+      }
+    );
+
+    this.load.spritesheet(
+      "zombie_student_walk",
+      "/assets/sprites/zombie_student/zombie80_walk8.png",
+      {
+        frameWidth: 96,
+        frameHeight: 96,
+      }
+    );
+    this.load.spritesheet(
+      "zombie_hardhat_walk",
+      "/assets/sprites/zombie_hardhat/hardhat80_walk8.png",
+      {
+        frameWidth: 96,
+        frameHeight: 96,
+      }
+    );
+
+    this.load.json("hero_walk_data", "/assets/sprites/player/hero80_walk.json");
+  }
   create() {
-    const graphics = this.make.graphics({ x: 0, y: 0 });
-    graphics.fillStyle(0xffffff);
-    graphics.fillRect(0, 0, 32, 32);
+    // muzzle 데이터 로드
+    const heroData = this.cache.json.get("hero_walk_data");
+    for (const dir of this.DIRS) {
+      this.muzzleData[dir] = heroData.walk[dir].muzzle;
+    }
 
-    graphics.fillStyle(0xffff00);
-    graphics.fillRect(28, 12, 12, 8);
-
-    graphics.generateTexture(`player`, 32, 32);
-    graphics.destroy();
-
-    this.player = this.physics.add.sprite(640, 360, "player");
+    this.player = this.physics.add.sprite(640, 360, "hero_walk", 18);
+    this.player.body!.setSize(20, 20);
+    this.player.body!.setOffset(38, 50);
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setZoom(0.5);
@@ -180,9 +213,15 @@ export default class GameScene extends Phaser.Scene {
 
       this.currentAmmo--;
 
+      // 총구(muzzle) 위치 계산 — JSON 데이터 기반
+      const dir = this.DIRS[this.currentRow];
+      const muzzle = this.muzzleData[dir][this.currentWalkFrame];
+      const muzzleWorldX = this.player.x + (muzzle[0] - 48);
+      const muzzleWorldY = this.player.y + (muzzle[1] - 48);
+
       const bullet = this.bullets.create(
-        this.player.x,
-        this.player.y,
+        muzzleWorldX,
+        muzzleWorldY,
         `player`
       ) as Phaser.Physics.Arcade.Sprite;
 
@@ -216,11 +255,6 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // 좀비 기본 셋팅 값
-    const zombieGraphics = this.make.graphics({ x: 0, y: 0 });
-    zombieGraphics.fillStyle(0xff0000);
-    zombieGraphics.fillRect(0, 0, 28, 28);
-    zombieGraphics.generateTexture(`zombie`, 28, 28);
-    zombieGraphics.destroy();
 
     this.zombies = this.physics.add.group();
 
@@ -244,12 +278,14 @@ export default class GameScene extends Phaser.Scene {
           const zombie = this.zombies.create(
             sx,
             sy,
-            "zombie"
+            Math.random() < 0.5 ? "zombie_student_walk" : "zombie_hardhat_walk"
           ) as Phaser.Physics.Arcade.Sprite;
           const tier = Math.floor((this.level - 1) / 10);
           const posInTier = (this.level - 1) % 10;
           const tierGrowth = posInTier <= 2 ? 0 : (posInTier - 2) * 3;
           zombie.setData("hp", 8 + tier * 20 + tierGrowth);
+          zombie.body!.setSize(28, 50);
+          zombie.body!.setOffset(34, 10);
         }
       },
     });
@@ -566,15 +602,45 @@ export default class GameScene extends Phaser.Scene {
       pointer.worldX,
       pointer.worldY
     );
-    this.player.setRotation(angle);
+
+    const OCT2ROW = [2, 1, 0, 7, 6, 5, 4, 3];
+    const angleDeg = ((((angle * 180) / Math.PI) % 360) + 360) % 360;
+
+    const row = OCT2ROW[Math.round(angleDeg / 45) % 8];
+    this.currentRow = row;
+    if (isMoving) {
+      const walkFrame = Math.floor(Date.now() / 100) % 9; // 100ms마다 프레임 변경, 0~8
+      this.currentWalkFrame = walkFrame;
+      this.player.setFrame(row * 9 + walkFrame);
+    } else {
+      this.currentWalkFrame = 0;
+      this.player.setFrame(row * 9); // 정지 = 첫 프레임
+    }
 
     // === 좀비 추적 + 시야 시스템 ===
+    const OCT2ROW_Z = [2, 1, 0, 7, 6, 5, 4, 3];
     this.zombies.getChildren().forEach((z) => {
       const zombie = z as Phaser.Physics.Arcade.Sprite;
+
+      // 좀비 이동
       const zombieSpeed = zombie.getData("isBoss")
         ? 50
         : Math.min(150, 80 + this.level * 1.5);
       this.physics.moveToObject(zombie, this.player, zombieSpeed);
+
+      // 좀비 걷기 애니메이션 (보스 제외)
+      if (!zombie.getData("isBoss")) {
+        const zAngle = Phaser.Math.Angle.Between(
+          zombie.x,
+          zombie.y,
+          this.player.x,
+          this.player.y
+        );
+        const zDeg = ((((zAngle * 180) / Math.PI) % 360) + 360) % 360;
+        const zRow = OCT2ROW_Z[Math.round(zDeg / 45) % 8];
+        const zWalkFrame = Math.floor(Date.now() / 120) % 9;
+        zombie.setFrame(zRow * 9 + zWalkFrame);
+      }
 
       // 플레이어와 좀비 사이 거리
       const distToZombie = Phaser.Math.Distance.Between(
@@ -584,11 +650,11 @@ export default class GameScene extends Phaser.Scene {
         zombie.y
       );
 
-      // 발밑 원형 범위 안이면 (근접)
+      // 발밑 원형 범위 안이면 (근접) — 원래 색으로 보임
       if (distToZombie < 140) {
-        zombie.setTint(0xff3333);
+        zombie.clearTint();
         zombie.setAlpha(1.0);
-        return; // forEach의 return = continue와 같음
+        return;
       }
 
       // 플래시라이트 각도 체크
@@ -612,7 +678,7 @@ export default class GameScene extends Phaser.Scene {
       const coneHalfRad = ((this.isADS ? 15 : 33) * Math.PI) / 180;
 
       if (angleDiff < coneHalfRad) {
-        zombie.setTint(0xff3333);
+        zombie.clearTint(); // 원래 색으로
         zombie.setAlpha(1.0);
       } else {
         zombie.setTint(0x000000);

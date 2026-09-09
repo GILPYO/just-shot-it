@@ -1,0 +1,70 @@
+{
+ "frame": 96,
+ "cols": 9,
+ "dirs": [
+  "s",
+  "se",
+  "e",
+  "ne",
+  "n",
+  "nw",
+  "w",
+  "sw"
+ ],
+ "fps": 9,
+ "loop": false,
+ "footY": 86,
+ "centerX": 48,
+ "charHeight": 78,
+ "snap": {
+  "s": "s",
+  "se": "e",
+  "e": "e",
+  "ne": "e",
+  "n": "n",
+  "nw": "w",
+  "w": "w",
+  "sw": "w"
+ },
+ "glow": [
+  0.0,
+  0.02,
+  0.71,
+  1.0,
+  0.71,
+  0.02,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "dir": {
+  "s": {
+   "source": "2cd36faa",
+   "mirrored": false,
+   "peakFrame": 3,
+   "widthAmp": 0.4,
+   "vBoost": 0.062
+  },
+  "e": {
+   "source": "2e6149da",
+   "mirrored": false,
+   "peakFrame": 4,
+   "widthAmp": 0.567,
+   "vBoost": 0.0
+  },
+  "n": {
+   "source": "024f0e22",
+   "mirrored": false,
+   "peakFrame": 4,
+   "widthAmp": 0.373,
+   "vBoost": 0.079
+  },
+  "w": {
+   "source": "2e6149da",
+   "mirrored": true,
+   "peakFrame": 4,
+   "widthAmp": 0.567,
+   "vBoost": 0.0
+  }
+ }
+}
